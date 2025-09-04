@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(/C:\\RealEstateDashboard/**)",
+      "Read(/C:\\RealEstateDashboard/**)",
+      "Read(/C:\\RealEstateDashboard/**)",
+      "Read(/C:\\RealEstateDashboard/**)",
+      "Read(/C:\\RealEstateDashboard/**)",
+      "Read(/C:\\RealEstateDashboard/**)",
+      "Read(/C:\\RealEstateDashboard/**)",
+      "Read(/C:\\RealEstateDashboard/**)",
+      "Read(/C:\\RealEstateDashboard/**)",
+      "Read(/C:\\RealEstateDashboard/**)",
+      "Read(/C:\\RealEstateDashboard/**)",
+      "Read(/C:\\RealEstateDashboard/**)",
+      "Read(/C:\\RealEstateDashboard/**)",
+      "Bash(python:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

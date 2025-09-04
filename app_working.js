@@ -1,0 +1,759 @@
+// Real Estate Beta Dashboard Application - Clean Working Version
+class RealEstateDashboard {
+    constructor() {
+        this.map = null;
+        this.currentLayer = null;
+        this.dataProcessor = null;
+        this.stateData = {};
+        this.metroData = {};
+        this.isDataLoaded = false;
+        this.currentView = 'state'; // 'state' or 'metro'
+        this.init();
+    }
+    
+    async init() {
+        this.initializeMap();
+        
+        // Try to load real data first, fallback to test data
+        this.dataProcessor = new DataProcessor();
+        let success = false;
+        
+        try {
+            success = await this.dataProcessor.loadData();
+        } catch (error) {
+            console.warn('Failed to load CSV data, trying fallback:', error);
+        }
+        
+        if (success) {
+            this.stateData = this.dataProcessor.getFormattedStateData();
+            this.metroData = this.dataProcessor.getFormattedMetroData();
+            this.isDataLoaded = true;
+            console.log('Loaded real CSV data successfully');
+        } else {
+            // Fallback to test data
+            console.log('Using fallback test data');
+            if (typeof TEST_STATE_DATA !== 'undefined' && typeof calculateMockBetas !== 'undefined') {
+                this.stateData = calculateMockBetas(TEST_STATE_DATA);
+                this.metroData = {}; // No metro fallback data
+                this.isDataLoaded = true;
+            } else {
+                console.error('No data available');
+                return;
+            }
+        }
+        
+        this.setupViewSelector();
+        this.createBasicStateLayer();
+    }
+    
+    initializeMap() {
+        this.map = L.map('map', {
+            preferCanvas: true,  // Better performance for many markers
+            zoomControl: true,
+            scrollWheelZoom: true,
+            doubleClickZoom: true,
+            dragging: true
+        }).setView([39.50, -98.35], 4);
+        
+        // Remove restrictive bounds to eliminate jumpiness
+        // this.map.setMaxBounds(bounds);
+        this.map.setMinZoom(3);
+        this.map.setMaxZoom(8);
+        
+        // Add dark theme tile layer
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap contributors, © CARTO',
+            maxZoom: 8,
+            subdomains: 'abcd'
+        }).addTo(this.map);
+        
+        // Add zoom event listener to update circle sizes
+        this.map.on('zoomend', () => {
+            if (this.currentLayer) {
+                this.updateCircleSizes();
+            }
+        });
+        
+        this.map.getContainer().style.background = '#000000';
+        
+        // Disable map interactions that might interfere with circle clicks
+        this.map.on('click', (e) => {
+            // Prevent map click from interfering with circle clicks
+            e.originalEvent.stopPropagation();
+        });
+    }
+    
+    setupViewSelector() {
+        const viewSelector = document.getElementById('viewSelector');
+        const dataInfo = document.getElementById('dataInfo');
+        
+        if (!viewSelector || !dataInfo) return;
+        
+        viewSelector.addEventListener('change', async (e) => {
+            this.currentView = e.target.value;
+            await this.switchView();
+            
+            // Update header text
+            if (this.currentView === 'metro') {
+                dataInfo.textContent = 'Hover over metros for market summary • Click for detailed analysis';
+            } else {
+                dataInfo.textContent = 'Hover over states for market summary • Click for detailed analysis';
+            }
+        });
+    }
+    
+    async switchView() {
+        // Clear existing layer
+        if (this.currentLayer) {
+            this.map.removeLayer(this.currentLayer);
+            this.currentLayer = null;
+        }
+        
+        // Create appropriate layer based on current view
+        if (this.currentView === 'metro') {
+            await this.createMetroLayer();
+        } else {
+            this.createBasicStateLayer();
+        }
+    }
+    
+    createBasicStateLayer() {
+        const stateCoordinates = {
+            'Nevada': [39.1612, -117.2713], 'Washington': [47.4009, -121.4905], 'Minnesota': [45.6945, -93.9002],
+            'Kansas': [38.5266, -96.7265], 'Maine': [44.6939, -69.3819], 'Colorado': [39.0598, -105.3111],
+            'Connecticut': [41.5978, -72.7554], 'Iowa': [42.0115, -93.2105], 'Idaho': [44.2405, -114.4788],
+            'California': [36.1162, -119.6816], 'Texas': [31.0545, -97.5635], 'Florida': [27.7663, -82.6404],
+            'New York': [42.1657, -74.9481], 'Pennsylvania': [40.5908, -77.2098], 'Illinois': [40.3363, -89.0022],
+            'Ohio': [40.3888, -82.7649], 'Georgia': [33.76, -84.39], 'North Carolina': [35.771, -78.638],
+            'Michigan': [43.3266, -84.5361], 'Arizona': [33.7298, -111.4312], 'Virginia': [37.7693, -78.17],
+            'Tennessee': [35.7478, -86.7923], 'Indiana': [39.8494, -86.2583], 'Massachusetts': [42.2373, -71.5314],
+            'Maryland': [39.0639, -76.8021], 'Missouri': [38.4561, -92.2884], 'Wisconsin': [44.2685, -89.6165],
+            'Oregon': [44.572, -122.0709], 'South Carolina': [33.8191, -80.9066], 'Alabama': [32.3182, -86.9023],
+            'Louisiana': [31.1695, -91.8678], 'Kentucky': [37.6681, -84.6701], 'Arkansas': [34.9513, -92.3809],
+            'Utah': [40.1135, -111.8535], 'Oklahoma': [35.5653, -96.9289], 'Mississippi': [32.7767, -89.6711],
+            'New Mexico': [34.8405, -106.2485], 'West Virginia': [38.4912, -80.9545], 'Nebraska': [41.1254, -98.2681],
+            'New Jersey': [40.3573, -74.4057], 'New Hampshire': [43.4525, -71.5639], 'Rhode Island': [41.6809, -71.5118],
+            'Montana': [47.0527, -110.2148], 'Delaware': [39.3185, -75.5071], 'South Dakota': [44.2998, -99.4388],
+            'North Dakota': [47.5289, -99.784], 'Alaska': [61.385, -152.2683], 'Vermont': [44.0459, -72.7107],
+            'Wyoming': [42.7475, -107.2085], 'Hawaii': [21.0943, -157.4983]
+        };
+        
+        const circles = [];
+        
+        Object.entries(stateCoordinates).forEach(([stateName, coords]) => {
+            const stateData = this.stateData[stateName];
+            if (!stateData) return;
+            
+            const beta5y = stateData.active_listing_count_beta_5y || 1;
+            const color = this.getBetaColor(beta5y);
+            const listingCount = stateData.active_listing_count || 1000;
+            
+            // Calculate zoom-adjusted radius
+            const radius = this.calculateCircleRadius(listingCount);
+            
+            const circle = L.circle(coords, {
+                color: '#ffffff',
+                fillColor: color,
+                fillOpacity: 0.8,
+                radius: radius,
+                weight: 3,  // Thicker border for better visibility
+                interactive: true,
+                bubblingMouseEvents: false  // Prevent event conflicts
+            });
+            
+            // Store data for zoom updates
+            circle._stateData = {
+                stateName,
+                stateData,
+                listingCount,
+                color
+            };
+            
+            circle.on({
+                mouseover: (e) => {
+                    e.originalEvent.stopPropagation();
+                    circle.setStyle({ fillOpacity: 1.0, weight: 5 }); // More dramatic highlight
+                    this.showPopup(e.latlng, stateName, stateData);
+                },
+                mouseout: (e) => {
+                    e.originalEvent.stopPropagation();
+                    circle.setStyle({ fillOpacity: 0.8, weight: 3 }); // Reset to default
+                    this.map.closePopup();
+                },
+                click: (e) => {
+                    e.originalEvent.stopPropagation();
+                    console.log(`Circle clicked: ${stateName}`);
+                    this.showDetailPanel(stateName, stateData);
+                }
+            });
+            
+            circles.push(circle);
+        });
+        
+        this.currentLayer = L.layerGroup(circles).addTo(this.map);
+    }
+    
+    async createMetroLayer() {
+        if (Object.keys(this.metroData).length === 0) {
+            console.warn('No metro data available');
+            return;
+        }
+        
+        // Load metro coordinates from SQLite database via API
+        const metroCoordinates = await this.loadMetroCoordinatesFromDB();
+        
+        const circles = [];
+        const missingCoordinates = [];
+        
+        console.log('=== METRO NAME MATCHING DEBUG ===');
+        console.log(`Loaded ${Object.keys(metroCoordinates).length} CBSA coordinates from API`);
+        console.log(`Processing ${Object.keys(this.metroData).length} metros from CSV data`);
+        
+        // Create smart mapping between CSV names and CBSA names
+        const nameMapping = this.createMetroNameMapping(Object.keys(this.metroData), Object.keys(metroCoordinates));
+        console.log('Created name mappings:', nameMapping);
+        
+        // First, check which metros are missing coordinates after mapping
+        Object.keys(this.metroData).forEach(metroName => {
+            const mappedName = nameMapping[metroName] || metroName;
+            if (!metroCoordinates[mappedName]) {
+                missingCoordinates.push(metroName);
+            }
+        });
+        
+        if (missingCoordinates.length > 0) {
+            console.warn(`Missing coordinates for ${missingCoordinates.length} metros after mapping:`, missingCoordinates.slice(0, 5));
+            console.log('First 5 missing metros:', missingCoordinates.slice(0, 5));
+        }
+        
+        // Render metros using name mapping
+        Object.keys(this.metroData).forEach(csvMetroName => {
+            const mappedName = nameMapping[csvMetroName] || csvMetroName;
+            const coords = metroCoordinates[mappedName];
+            const metroData = this.metroData[csvMetroName];
+            
+            if (!coords) return;
+            
+            const beta5y = metroData.active_listing_count_beta_5y || 1;
+            const color = this.getBetaColor(beta5y);
+            
+            // Use uniform radius for all metros
+            const radius = this.calculateCircleRadius(0, true); // true for uniform
+            
+            const circle = L.circle(coords, {
+                color: '#ffffff',
+                fillColor: color,
+                fillOpacity: 0.8,
+                radius: radius,
+                weight: 3,
+                interactive: true,
+                bubblingMouseEvents: false
+            });
+            
+            // Store data for zoom updates
+            circle._stateData = {
+                stateName: csvMetroName,
+                stateData: metroData,
+                listingCount: 0, // Not used for uniform sizing
+                color
+            };
+            
+            circle.on({
+                mouseover: (e) => {
+                    e.originalEvent.stopPropagation();
+                    circle.setStyle({ fillOpacity: 1.0, weight: 5 });
+                    this.showPopup(e.latlng, csvMetroName, metroData);
+                },
+                mouseout: (e) => {
+                    e.originalEvent.stopPropagation();
+                    circle.setStyle({ fillOpacity: 0.8, weight: 3 });
+                    this.map.closePopup();
+                },
+                click: (e) => {
+                    e.originalEvent.stopPropagation();
+                    console.log(`Metro clicked: ${csvMetroName}`);
+                    this.showDetailPanel(csvMetroName, metroData);
+                }
+            });
+            
+            circles.push(circle);
+        });
+        
+        this.currentLayer = L.layerGroup(circles).addTo(this.map);
+    }
+    
+    async loadMetroCoordinatesFromDB() {
+        console.log('🔄 Attempting to load metro coordinates from API...');
+        try {
+            // Try to load from SQLite database via API
+            const response = await fetch('http://localhost:5001/api/metros');
+            console.log(`📡 API Response status: ${response.status} ${response.statusText}`);
+            
+            if (response.ok) {
+                const coordinates = await response.json();
+                console.log(`✅ Successfully loaded ${Object.keys(coordinates).length} metro coordinates from database API`);
+                console.log('📊 Sample API data:', Object.keys(coordinates).slice(0, 3));
+                return coordinates;
+            } else {
+                console.error(`❌ Metro API returned error ${response.status}: ${response.statusText}`);
+                console.log('🔄 Falling back to static coordinates file');
+                return this.getFallbackMetroCoordinates();
+            }
+        } catch (error) {
+            console.error('❌ Failed to load metro coordinates from database:', error);
+            console.log('🔄 Falling back to static coordinates file');
+            return this.getFallbackMetroCoordinates();
+        }
+    }
+    
+    getFallbackMetroCoordinates() {
+        // Fallback to external file if available, otherwise empty object
+        if (typeof METRO_COORDINATES !== 'undefined') {
+            console.log(`📁 Using fallback metroCoordinates.js with ${Object.keys(METRO_COORDINATES).length} entries`);
+            console.log('📊 Sample fallback data:', Object.keys(METRO_COORDINATES).slice(0, 3));
+            return METRO_COORDINATES;
+        } else {
+            console.warn('⚠️ No fallback coordinates available!');
+            return {};
+        }
+    }
+    
+    createMetroNameMapping(csvNames, cbsaNames) {
+        const mapping = {};
+        
+        // Hardcoded mappings for major metros with complex naming
+        const hardcodedMappings = {
+            // New York variations
+            'New York, NY': 'New York-Newark-Jersey City, NY-NJ Metro Area',
+            'New York': 'New York-Newark-Jersey City, NY-NJ Metro Area',
+            'New York City': 'New York-Newark-Jersey City, NY-NJ Metro Area',
+            'NYC': 'New York-Newark-Jersey City, NY-NJ Metro Area',
+            'New York-Newark-Jersey City': 'New York-Newark-Jersey City, NY-NJ Metro Area',
+            'New York-Newark-Jersey City, NY-NJ-PA': 'New York-Newark-Jersey City, NY-NJ Metro Area',
+            
+            // Washington DC variations  
+            'Washington, DC': 'Washington-Arlington-Alexandria, DC-VA-MD-WV Metro Area',
+            'Washington': 'Washington-Arlington-Alexandria, DC-VA-MD-WV Metro Area',
+            'Washington DC': 'Washington-Arlington-Alexandria, DC-VA-MD-WV Metro Area',
+            'DC': 'Washington-Arlington-Alexandria, DC-VA-MD-WV Metro Area',
+            'Washington-Arlington-Alexandria': 'Washington-Arlington-Alexandria, DC-VA-MD-WV Metro Area',
+            'Washington-Arlington-Alexandria, DC-VA-MD-WV': 'Washington-Arlington-Alexandria, DC-VA-MD-WV Metro Area',
+            
+            // Las Vegas variations (prioritize Nevada over New Mexico)
+            'Las Vegas, NV': 'Las Vegas-Henderson-North Las Vegas, NV Metro Area',
+            'Las Vegas': 'Las Vegas-Henderson-North Las Vegas, NV Metro Area',
+            'Las Vegas Nevada': 'Las Vegas-Henderson-North Las Vegas, NV Metro Area',
+            'Las Vegas-Henderson': 'Las Vegas-Henderson-North Las Vegas, NV Metro Area',
+            'Las Vegas-Henderson-Paradise, NV': 'Las Vegas-Henderson-North Las Vegas, NV Metro Area',
+            'Las Vegas-Henderson-Paradise': 'Las Vegas-Henderson-North Las Vegas, NV Metro Area',
+            'Las Vegas-Henderson-North Las Vegas, NV': 'Las Vegas-Henderson-North Las Vegas, NV Metro Area',
+            'Las Vegas-Henderson-North Las Vegas': 'Las Vegas-Henderson-North Las Vegas, NV Metro Area',
+            
+            // Miami variations
+            'Miami, FL': 'Miami-Fort Lauderdale-West Palm Beach, FL Metro Area',
+            'Miami': 'Miami-Fort Lauderdale-West Palm Beach, FL Metro Area',
+            'Miami-Fort Lauderdale': 'Miami-Fort Lauderdale-West Palm Beach, FL Metro Area',
+            'Miami-Fort Lauderdale-Pompano Beach, FL': 'Miami-Fort Lauderdale-West Palm Beach, FL Metro Area',
+            'Miami-Fort Lauderdale-Pompano Beach': 'Miami-Fort Lauderdale-West Palm Beach, FL Metro Area',
+            
+            // San Francisco variations
+            'San Francisco, CA': 'San Francisco-Oakland-Fremont, CA Metro Area',
+            'San Francisco': 'San Francisco-Oakland-Fremont, CA Metro Area',
+            'SF': 'San Francisco-Oakland-Fremont, CA Metro Area',
+            'San Francisco-Oakland': 'San Francisco-Oakland-Fremont, CA Metro Area',
+            'San Francisco Bay Area': 'San Francisco-Oakland-Fremont, CA Metro Area',
+            'San Francisco-Oakland-Berkeley, CA': 'San Francisco-Oakland-Fremont, CA Metro Area',
+            'San Francisco-Oakland-Berkeley': 'San Francisco-Oakland-Fremont, CA Metro Area',
+            
+            // Other common variations from old naming
+            'Birmingham-Hoover, AL': 'Birmingham, AL Metro Area',
+            'Nashville-Davidson-Murfreesboro-Franklin, TN': 'Nashville-Davidson--Murfreesboro--Franklin, TN Metro Area',
+            'Atlanta-Sandy Springs-Alpharetta, GA': 'Atlanta-Sandy Springs-Roswell, GA Metro Area'
+        };
+        
+        // First, apply hardcoded mappings
+        csvNames.forEach(csvName => {
+            if (hardcodedMappings[csvName]) {
+                mapping[csvName] = hardcodedMappings[csvName];
+                console.log(`Hardcoded mapping: "${csvName}" -> "${hardcodedMappings[csvName]}"`);
+            }
+        });
+        
+        // Helper function to normalize names for comparison
+        const normalize = (name) => {
+            return name.toLowerCase()
+                .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+                .replace(/\s+/g, ' ')        // Normalize whitespace
+                .trim();
+        };
+        
+        // Helper function to extract key city names
+        const extractCityNames = (name) => {
+            return name.split(/[-,]/)
+                .map(part => part.trim())
+                .filter(part => part.length > 2)
+                .map(part => part.replace(/\s+(metro|micro|area|msa).*$/i, ''))
+                .map(part => normalize(part));
+        };
+        
+        csvNames.forEach(csvName => {
+            // Skip if already mapped by hardcoded mappings
+            if (mapping[csvName]) {
+                return;
+            }
+            
+            let bestMatch = null;
+            let bestScore = 0;
+            
+            const csvNormalized = normalize(csvName);
+            const csvCities = extractCityNames(csvName);
+            
+            cbsaNames.forEach(cbsaName => {
+                // Skip problematic matches that should be handled by hardcoded mappings
+                if (csvName.toLowerCase().includes('las vegas') && cbsaName.includes('Las Vegas, NM')) {
+                    return; // Skip Las Vegas, NM when looking for Las Vegas (prefer Nevada)
+                }
+                
+                let score = 0;
+                const cbsaNormalized = normalize(cbsaName);
+                const cbsaCities = extractCityNames(cbsaName);
+                
+                // Exact match
+                if (csvNormalized === cbsaNormalized) {
+                    score = 100;
+                }
+                // Check if CSV name is contained in CBSA name
+                else if (cbsaNormalized.includes(csvNormalized)) {
+                    score = 80;
+                }
+                // Check city name matches (more strict)
+                else {
+                    const cityMatches = csvCities.filter(city => 
+                        cbsaCities.some(cbsaCity => {
+                            // More strict matching - require at least 4 characters and better overlap
+                            if (city.length < 4 || cbsaCity.length < 4) return false;
+                            
+                            // Check for substantial overlap (at least 80% of shorter string)
+                            const minLength = Math.min(city.length, cbsaCity.length);
+                            const maxLength = Math.max(city.length, cbsaCity.length);
+                            
+                            if (city === cbsaCity) return true; // Exact match
+                            if (city.includes(cbsaCity) && cbsaCity.length >= minLength * 0.8) return true;
+                            if (cbsaCity.includes(city) && city.length >= minLength * 0.8) return true;
+                            
+                            return false;
+                        })
+                    ).length;
+                    
+                    if (cityMatches > 0) {
+                        score = Math.min(50 + (cityMatches * 15), 90);
+                    }
+                }
+                
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestMatch = cbsaName;
+                }
+            });
+            
+            if (bestMatch && bestScore >= 75) { // Only map if very confident (increased from 50)
+                mapping[csvName] = bestMatch;
+                if (bestScore < 90) { // Log uncertain mappings
+                    console.log(`Mapped: "${csvName}" -> "${bestMatch}" (score: ${bestScore})`);
+                }
+            } else if (bestMatch) {
+                console.warn(`❌ Rejected mapping: "${csvName}" -> "${bestMatch}" (score: ${bestScore} too low)`);
+            }
+        });
+        
+        return mapping;
+    }
+    
+    async geocodeMissingMetros(missingMetros, metroCoordinates) {
+        console.log('Attempting to geocode missing metros...');
+        
+        for (const metroName of missingMetros) {
+            try {
+                // Clean up metro name for geocoding
+                const searchQuery = this.cleanMetroName(metroName);
+                
+                // Use OpenStreetMap Nominatim (free, no API key)
+                const response = await fetch(
+                    `https://nominatim.openstreetmap.org/search?` +
+                    `q=${encodeURIComponent(searchQuery)}&` +
+                    `format=json&limit=1&countrycodes=us&` +
+                    `addressdetails=1&extratags=1`
+                );
+                
+                const data = await response.json();
+                
+                if (data && data.length > 0) {
+                    const lat = parseFloat(data[0].lat);
+                    const lon = parseFloat(data[0].lon);
+                    
+                    // Add to coordinates object
+                    metroCoordinates[metroName] = [lat, lon];
+                    
+                    console.log(`✅ Found coordinates for ${metroName}: [${lat}, ${lon}]`);
+                } else {
+                    console.warn(`❌ No coordinates found for: ${metroName}`);
+                }
+                
+                // Rate limiting - be respectful to free API
+                await this.sleep(100);
+                
+            } catch (error) {
+                console.error(`Error geocoding ${metroName}:`, error);
+            }
+        }
+        
+        console.log('Geocoding complete. Creating metro layer with new coordinates...');
+        // Don't call createMetroLayer() recursively - just continue with current execution
+    }
+    
+    cleanMetroName(metroName) {
+        // Convert "Dallas-Fort Worth-Arlington, TX" to "Dallas Fort Worth Texas"
+        return metroName
+            .replace(/-/g, ' ') // Replace hyphens with spaces
+            .replace(/,.*$/, '') // Remove everything after first comma
+            .replace(/\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b/gi, 
+                   (match) => this.getStateName(match)) // Convert state codes to full names
+            .trim();
+    }
+    
+    getStateName(code) {
+        const states = {
+            'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 'CA': 'California',
+            'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware', 'FL': 'Florida', 'GA': 'Georgia',
+            'HI': 'Hawaii', 'ID': 'Idaho', 'IL': 'Illinois', 'IN': 'Indiana', 'IA': 'Iowa',
+            'KS': 'Kansas', 'KY': 'Kentucky', 'LA': 'Louisiana', 'ME': 'Maine', 'MD': 'Maryland',
+            'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota', 'MS': 'Mississippi', 'MO': 'Missouri',
+            'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada', 'NH': 'New Hampshire', 'NJ': 'New Jersey',
+            'NM': 'New Mexico', 'NY': 'New York', 'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio',
+            'OK': 'Oklahoma', 'OR': 'Oregon', 'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina',
+            'SD': 'South Dakota', 'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont',
+            'VA': 'Virginia', 'WA': 'Washington', 'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming'
+        };
+        return states[code.toUpperCase()] || code;
+    }
+    
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
+    calculateCircleRadius(listingCount, isUniform = false) {
+        const zoom = this.map ? this.map.getZoom() : 4;
+        
+        if (isUniform || this.currentView === 'metro') {
+            // Uniform size for metro view - all circles same size
+            return Math.max(8000, 20000 * Math.pow(0.7, zoom - 4));
+        }
+        
+        // Variable size for state view - based on listing count
+        // Base radius that scales with zoom level
+        const baseRadius = Math.max(6000, 25000 * Math.pow(0.7, zoom - 4));
+        
+        // Size multiplier based on listing count (smaller multiplier for better consistency)
+        const sizeMultiplier = Math.sqrt(listingCount) * Math.max(200, 800 * Math.pow(0.8, zoom - 4));
+        
+        return Math.max(baseRadius, sizeMultiplier);
+    }
+    
+    updateCircleSizes() {
+        if (!this.currentLayer) return;
+        
+        this.currentLayer.eachLayer((circle) => {
+            if (circle._stateData && circle.setRadius) {
+                const isUniform = this.currentView === 'metro';
+                const newRadius = this.calculateCircleRadius(circle._stateData.listingCount, isUniform);
+                circle.setRadius(newRadius);
+            }
+        });
+    }
+    
+    getBetaColor(beta) {
+        if (beta < 0.5) return '#00bfff';
+        if (beta < 0.8) return '#40e0d0';
+        if (beta < 1.2) return '#ffd700';
+        if (beta < 1.5) return '#ff6347';
+        return '#ff1493';
+    }
+    
+    showPopup(latlng, stateName, stateData) {
+        const popupContent = `
+            <div class="popup-title" style="color: #ffffff; font-weight: bold; margin-bottom: 0.75rem; text-align: center;">${stateName}</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; font-size: 0.75rem; min-width: 280px;">
+                <!-- Header Row -->
+                <div style="color: #ffffff; font-weight: bold; text-align: center; border-bottom: 1px solid #ffffff; padding-bottom: 0.25rem;">Metric</div>
+                <div style="color: #ffffff; font-weight: bold; text-align: center; border-bottom: 1px solid #ffffff; padding-bottom: 0.25rem;">Current</div>
+                <div style="color: #ffffff; font-weight: bold; text-align: center; border-bottom: 1px solid #ffffff; padding-bottom: 0.25rem;">5Y Beta</div>
+                
+                <!-- Active Listings Row -->
+                <div style="color: #ffffff; padding: 0.25rem 0;">Active</div>
+                <div style="color: #ffffff; font-weight: bold; text-align: right; padding: 0.25rem 0;">${Math.round(stateData.active_listing_count || 0).toLocaleString()}</div>
+                <div style="color: #ffffff; text-align: right; padding: 0.25rem 0;">${this.formatBeta(stateData.active_listing_count_beta_5y) || 'N/A'}</div>
+                
+                <!-- New Listings Row -->
+                <div style="color: #ffffff; padding: 0.25rem 0;">New</div>
+                <div style="color: #ffffff; font-weight: bold; text-align: right; padding: 0.25rem 0;">${Math.round(stateData.new_listing_count || 0).toLocaleString()}</div>
+                <div style="color: #ffffff; text-align: right; padding: 0.25rem 0;">${this.formatBeta(stateData.new_listing_count_beta_5y) || 'N/A'}</div>
+                
+                <!-- Pending Listings Row -->
+                <div style="color: #ffffff; padding: 0.25rem 0;">Pending</div>
+                <div style="color: #ffffff; font-weight: bold; text-align: right; padding: 0.25rem 0;">${Math.round(stateData.pending_listing_count || 0).toLocaleString()}</div>
+                <div style="color: #ffffff; text-align: right; padding: 0.25rem 0;">${this.formatBeta(stateData.pending_listing_count_beta_5y) || 'N/A'}</div>
+                
+                <!-- Median Price Row -->
+                <div style="color: #ffffff; padding: 0.25rem 0;">Median ($)</div>
+                <div style="color: #ffffff; font-weight: bold; text-align: right; padding: 0.25rem 0;">$${Math.round(stateData.median_listing_price || 0).toLocaleString()}</div>
+                <div style="color: #ffffff; text-align: right; padding: 0.25rem 0;">${this.formatBeta(stateData.median_listing_price_beta_5y) || 'N/A'}</div>
+            </div>
+            <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid #ffffff; font-size: 0.7rem; color: #ffffff; text-align: center;">
+                Click for detailed analysis • ${this.formatDate(stateData.last_updated)}
+            </div>
+        `;
+        
+        L.popup()
+            .setLatLng(latlng)
+            .setContent(popupContent)
+            .openOn(this.map);
+    }
+    
+    showDetailPanel(stateName, stateData) {
+        const detailContent = document.getElementById('detailContent');
+        if (!detailContent || !stateData) return;
+        
+        // Helper function to get change class
+        const getChangeClass = (value) => {
+            if (value > 0) return 'change-positive';
+            if (value < 0) return 'change-negative';
+            return '';
+        };
+        
+        const content = `
+            <div style="text-align: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #444;">
+                <h2 style="color: #ffffff; margin: 0; font-size: 1.4rem;">${stateName}</h2>
+                <span style="color: #aaa; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">${stateData.state_id || 'N/A'} • ${this.formatDate(stateData.last_updated)}</span>
+            </div>
+            
+            <div class="beta-summary">
+                <h4 style="color: #ffffff; margin-bottom: 0.75rem; text-align: center;">Active Listings Beta Timeline</h4>
+                <div class="beta-timeline">
+                    <div class="beta-item">
+                        <div class="period">1 Year</div>
+                        <div class="value">${this.formatBeta(stateData.active_listing_count_beta_1y)}</div>
+                    </div>
+                    <div class="beta-item">
+                        <div class="period">3 Year</div>
+                        <div class="value">${this.formatBeta(stateData.active_listing_count_beta_3y)}</div>
+                    </div>
+                    <div class="beta-item">
+                        <div class="period">5 Year</div>
+                        <div class="value">${this.formatBeta(stateData.active_listing_count_beta_5y)}</div>
+                    </div>
+                </div>
+                <div style="text-align: center; margin-top: 0.75rem; font-size: 0.7rem; color: #999;">
+                    ${this.getBetaInterpretation(stateData.active_listing_count_beta_5y)}
+                </div>
+            </div>
+            
+            <div class="metric-grid">
+                <div class="metric-card">
+                    <h5>Active Listings</h5>
+                    <div class="metric-value">${this.formatValue(stateData.active_listing_count)}</div>
+                    <div class="metric-change">
+                        <span class="${getChangeClass(stateData.active_listing_count_mm)}">MoM: ${this.formatPercent(stateData.active_listing_count_mm)}%</span>
+                        <span class="${getChangeClass(stateData.active_listing_count_yy)}">YoY: ${this.formatPercent(stateData.active_listing_count_yy)}%</span>
+                    </div>
+                </div>
+                
+                <div class="metric-card">
+                    <h5>New Listings</h5>
+                    <div class="metric-value">${this.formatValue(stateData.new_listing_count)}</div>
+                    <div class="metric-change">
+                        <span class="${getChangeClass(stateData.new_listing_count_mm)}">MoM: ${this.formatPercent(stateData.new_listing_count_mm)}%</span>
+                        <span class="${getChangeClass(stateData.new_listing_count_yy)}">YoY: ${this.formatPercent(stateData.new_listing_count_yy)}%</span>
+                    </div>
+                </div>
+                
+                <div class="metric-card">
+                    <h5>Pending Sale</h5>
+                    <div class="metric-value">${this.formatValue(stateData.pending_listing_count)}</div>
+                    <div class="metric-change">
+                        <span class="${getChangeClass(stateData.pending_listing_count_mm)}">MoM: ${this.formatPercent(stateData.pending_listing_count_mm)}%</span>
+                        <span class="${getChangeClass(stateData.pending_listing_count_yy)}">YoY: ${this.formatPercent(stateData.pending_listing_count_yy)}%</span>
+                    </div>
+                </div>
+                
+                <div class="metric-card">
+                    <h5>Median Price</h5>
+                    <div class="metric-value" style="color: #ffd700;">$${this.formatPrice(stateData.median_listing_price)}</div>
+                    <div class="metric-change">
+                        <span class="${getChangeClass(stateData.median_listing_price_mm)}">MoM: ${this.formatPercent(stateData.median_listing_price_mm)}%</span>
+                        <span class="${getChangeClass(stateData.median_listing_price_yy)}">YoY: ${this.formatPercent(stateData.median_listing_price_yy)}%</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 1.5rem; padding: 1rem; background: #1e1e1e; border-radius: 8px; border: 1px solid #444;">
+                <h5 style="color: #ffffff; margin-bottom: 0.75rem; text-align: center;">Market Positioning</h5>
+                <div style="font-size: 0.75rem; color: #ccc; line-height: 1.4;">
+                    <div style="margin-bottom: 0.5rem;">
+                        <strong style="color: #00ff7f;">Low Beta (&lt; 0.8):</strong> More stable than national average
+                    </div>
+                    <div style="margin-bottom: 0.5rem;">
+                        <strong style="color: #ffd700;">Market Beta (0.8-1.2):</strong> Moves with national trends
+                    </div>
+                    <div>
+                        <strong style="color: #ff6b6b;">High Beta (&gt; 1.2):</strong> More volatile than national average
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        detailContent.innerHTML = content;
+    }
+    
+    getBetaInterpretation(beta) {
+        if (!beta || isNaN(beta)) return 'Beta data unavailable';
+        if (beta < 0.8) return 'Lower volatility than national market';
+        if (beta > 1.2) return 'Higher volatility than national market';
+        return 'Similar volatility to national market';
+    }
+    
+    formatValue(value) {
+        if (typeof value !== 'number' || isNaN(value)) return 'N/A';
+        return Math.round(value).toLocaleString();
+    }
+    
+    formatBeta(value) {
+        if (typeof value !== 'number' || isNaN(value)) return 'N/A';
+        return value.toFixed(2);
+    }
+    
+    formatPercent(value) {
+        if (typeof value !== 'number' || isNaN(value)) return 'N/A';
+        return (value * 100).toFixed(1);
+    }
+    
+    formatPrice(value) {
+        if (typeof value !== 'number' || isNaN(value)) return 'N/A';
+        return Math.round(value).toLocaleString();
+    }
+    
+    formatDate(yyyymm) {
+        if (!yyyymm) return 'N/A';
+        const dateStr = String(yyyymm);
+        const year = dateStr.substring(0, 4);
+        const month = dateStr.substring(4, 6);
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return `${monthNames[parseInt(month) - 1]} ${year}`;
+    }
+}
+
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    const dashboard = new RealEstateDashboard();
+    window.dashboard = dashboard;
+});
