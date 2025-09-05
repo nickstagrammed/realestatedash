@@ -35,14 +35,25 @@
                     <div class="sidebar-intro">
                         <p>Click on a state to view comprehensive market analysis including:</p>
                         <ul>
-                            <li>Beta volatility metrics
-                                 (1Y, 3Y, 5Y)</li>
+                            <li>Beta volatility metrics (1Y, 3Y, 5Y)</li>
                             <li>Month-over-Month changes</li>
                             <li>Year-over-Year trends</li>
                             <li>Market positioning analysis</li>
                         </ul>
                     </div>
-
+                </div>
+                
+                <div id="trendsSection" class="trends-section" style="display: none;">
+                    <h4>5-Year Market Trends</h4>
+                    <div class="trend-chart-container">
+                        <canvas id="trendsChart" width="400" height="200"></canvas>
+                    </div>
+                    <div class="trend-legend">
+                        <div class="trend-info">
+                            <span class="trend-period" id="trendPeriod">July 2020 - July 2025</span>
+                            <span class="trend-location" id="trendLocation"></span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -76,6 +87,9 @@
     
     <!-- Leaflet JavaScript -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- Test Data (fallback) -->
     <script src="testData.js"></script>

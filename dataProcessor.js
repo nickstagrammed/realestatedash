@@ -446,6 +446,10 @@ class DataProcessor {
             const medianChanges = this.calculateChanges(metroTimeSeries, 'median_listing_price');
             
             formatted[metro] = {
+                // CBSA identifiers
+                cbsa_code: latest.cbsa_code || null,
+                cbsa_title: latest.cbsa_title || metro,
+                
                 // Current values
                 active_listing_count: latest.active_listing_count || 0,
                 new_listing_count: latest.new_listing_count || 0,
