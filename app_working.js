@@ -8,6 +8,8 @@ class RealEstateDashboard {
         this.metroData = {};
         this.isDataLoaded = false;
         this.currentView = 'state'; // 'state' or 'metro'
+        this.trendsChart = null;
+        this.API_BASE_URL = 'http://localhost:5001/api';
         this.init();
     }
     
@@ -184,6 +186,7 @@ class RealEstateDashboard {
                     e.originalEvent.stopPropagation();
                     console.log(`Circle clicked: ${stateName}`);
                     this.showDetailPanel(stateName, stateData);
+                    this.loadTrendChart('state', stateName);
                 }
             });
             
@@ -273,6 +276,9 @@ class RealEstateDashboard {
                     e.originalEvent.stopPropagation();
                     console.log(`Metro clicked: ${csvMetroName}`);
                     this.showDetailPanel(csvMetroName, metroData);
+                    // For metros, we need to get the CBSA code from the metro data
+                    const cbsaCode = metroData.cbsa_code || csvMetroName;
+                    this.loadTrendChart('metro', cbsaCode);
                 }
             });
             
@@ -749,6 +755,240 @@ class RealEstateDashboard {
         const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                            'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
         return `${monthNames[parseInt(month) - 1]} ${year}`;
+    }
+    
+    async loadTrendChart(level, identifier) {
+        console.log('Loading trend chart for:', level, identifier);
+        
+        const trendsSection = document.getElementById('trendsSection');
+        const trendLocation = document.getElementById('trendLocation');
+        
+        if (!trendsSection) {
+            console.error('Trends section not found');
+            return;
+        }
+        
+        // Show trends section
+        trendsSection.style.display = 'block';
+        
+        // Update location display
+        if (trendLocation) {
+            trendLocation.textContent = `${level === 'state' ? 'State: ' : 'Metro: '}${identifier}`;
+        }
+        
+        // Show loading state
+        this.showTrendLoading();
+        
+        try {
+            let trendData;
+            
+            if (level === 'state') {
+                // Use API for state data
+                const response = await fetch(`${this.API_BASE_URL}/trends/${level}/${encodeURIComponent(identifier)}`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                trendData = await response.json();
+            } else if (level === 'metro') {
+                // Extract data directly from loaded metro data
+                trendData = this.extractMetroTrendData(identifier);
+            }
+            
+            if (trendData) {
+                this.renderTrendChart(trendData);
+            } else {
+                throw new Error('No trend data available');
+            }
+            
+        } catch (error) {
+            console.error('Error loading trend data:', error);
+            this.showTrendError(`Failed to load trend data: ${error.message}`);
+        }
+    }
+    
+    extractMetroTrendData(metroName) {
+        // Get the raw time series data from the dataProcessor (not formatted data)
+        const metroTimeSeries = this.dataProcessor.metroData[metroName];
+        if (!metroTimeSeries || !Array.isArray(metroTimeSeries) || metroTimeSeries.length === 0) {
+            console.error('No metro time series data found for:', metroName);
+            console.log('Available metros:', Object.keys(this.dataProcessor.metroData).slice(0, 5));
+            return null;
+        }
+        
+        // Filter for 5-year range (last 60 months)
+        const fiveYearData = metroTimeSeries.slice(0, 60).reverse(); // Reverse to get chronological order
+        
+        const result = {
+            level: 'metro',
+            identifier: metroName,
+            dateRange: '5-year trend from loaded data',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Active Listings',
+                        data: [],
+                        borderColor: '#3B82F6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.1
+                    },
+                    {
+                        label: 'New Listings',
+                        data: [],
+                        borderColor: '#10B981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.1
+                    },
+                    {
+                        label: 'Pending Listings',
+                        data: [],
+                        borderColor: '#F59E0B',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        tension: 0.1
+                    }
+                ]
+            }
+        };
+        
+        // Populate the chart data
+        fiveYearData.forEach(monthData => {
+            const monthDate = String(monthData.month_date_yyyymm);
+            const year = monthDate.substring(0, 4);
+            const month = monthDate.substring(4, 6);
+            const label = `${year}-${month}`;
+            
+            result.data.labels.push(label);
+            result.data.datasets[0].data.push(monthData.active_listing_count || 0);
+            result.data.datasets[1].data.push(monthData.new_listing_count || 0);
+            result.data.datasets[2].data.push(monthData.pending_listing_count || 0);
+        });
+        
+        return result;
+    }
+    
+    showTrendLoading() {
+        const chartContainer = document.querySelector('.trend-chart-container');
+        if (chartContainer) {
+            chartContainer.innerHTML = '<div class="trend-loading">Loading 5-year trend data...</div>';
+        }
+    }
+    
+    showTrendError(message) {
+        const chartContainer = document.querySelector('.trend-chart-container');
+        if (chartContainer) {
+            chartContainer.innerHTML = `<div class="trend-error">${message}</div>`;
+        }
+    }
+    
+    renderTrendChart(trendData) {
+        console.log('Rendering trend chart with data:', trendData);
+        
+        // Destroy existing chart if it exists
+        if (this.trendsChart) {
+            this.trendsChart.destroy();
+        }
+        
+        // Reset chart container and create new canvas
+        const chartContainer = document.querySelector('.trend-chart-container');
+        if (!chartContainer) {
+            console.error('Chart container not found');
+            return;
+        }
+        
+        chartContainer.innerHTML = '<canvas id="trendsChart"></canvas>';
+        
+        // Get fresh canvas reference
+        const canvas = document.getElementById('trendsChart');
+        if (!canvas) {
+            console.error('Canvas element not created');
+            return;
+        }
+        
+        this.trendsChart = new Chart(canvas, {
+            type: 'line',
+            data: trendData.data,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                aspectRatio: 1.8,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: `5-Year Market Trends - ${trendData.identifier}`,
+                        color: '#ffffff',
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    },
+                    legend: {
+                        labels: {
+                            color: '#ffffff',
+                            usePointStyle: true,
+                            padding: 20
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#ffffff',
+                        borderColor: '#333333',
+                        borderWidth: 1,
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.dataset.label}: ${context.parsed.y?.toLocaleString() || 'N/A'}`;
+                            }
+                        }
+                    }
+                },
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Date',
+                            color: '#ffffff'
+                        },
+                        ticks: {
+                            color: '#cccccc',
+                            maxTicksLimit: 12
+                        },
+                        grid: {
+                            color: '#333333'
+                        }
+                    },
+                    y: {
+                        display: true,
+                        title: {
+                            display: true,
+                            text: 'Number of Listings',
+                            color: '#ffffff'
+                        },
+                        ticks: {
+                            color: '#cccccc',
+                            callback: function(value) {
+                                return value?.toLocaleString() || '';
+                            }
+                        },
+                        grid: {
+                            color: '#333333'
+                        }
+                    }
+                },
+                elements: {
+                    point: {
+                        radius: 2,
+                        hoverRadius: 6
+                    },
+                    line: {
+                        tension: 0.1,
+                        borderWidth: 2
+                    }
+                }
+            }
+        });
     }
 }
 

@@ -200,6 +200,103 @@ def get_metros_by_type(cbsa_type):
             conn.close()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/trends/<level>/<identifier>', methods=['GET'])
+def get_trend_data(level, identifier):
+    """Get 5-year trend data for Active, New, Pending listings"""
+    valid_levels = ['national', 'state', 'metro']
+    if level not in valid_levels:
+        return jsonify({'error': f'Invalid level. Must be one of: {valid_levels}'}), 400
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database not found'}), 404
+    
+    try:
+        cursor = conn.cursor()
+        
+        # 5-year date range (July 2020 - July 2025)
+        start_date = 202007
+        end_date = 202507
+        
+        if level == 'national':
+            cursor.execute('''
+                SELECT month_date, active_listing_count, new_listing_count, pending_listing_count
+                FROM national_timeseries
+                WHERE month_date BETWEEN ? AND ?
+                ORDER BY month_date
+            ''', (start_date, end_date))
+            
+        elif level == 'state':
+            cursor.execute('''
+                SELECT month_date, active_listing_count, new_listing_count, pending_listing_count
+                FROM state_timeseries
+                WHERE state = ? AND month_date BETWEEN ? AND ?
+                ORDER BY month_date
+            ''', (identifier, start_date, end_date))
+            
+        elif level == 'metro':
+            cursor.execute('''
+                SELECT month_date, active_listing_count, new_listing_count, pending_listing_count
+                FROM metro_timeseries
+                WHERE cbsa_code = ? AND month_date BETWEEN ? AND ?
+                ORDER BY month_date
+            ''', (identifier, start_date, end_date))
+        
+        data = cursor.fetchall()
+        conn.close()
+        
+        # Format data for Chart.js
+        result = {
+            'level': level,
+            'identifier': identifier,
+            'dateRange': f"{start_date}-{end_date}",
+            'data': {
+                'labels': [],
+                'datasets': [
+                    {
+                        'label': 'Active Listings',
+                        'data': [],
+                        'borderColor': '#3B82F6',
+                        'backgroundColor': 'rgba(59, 130, 246, 0.1)',
+                        'tension': 0.1
+                    },
+                    {
+                        'label': 'New Listings',
+                        'data': [],
+                        'borderColor': '#10B981',
+                        'backgroundColor': 'rgba(16, 185, 129, 0.1)',
+                        'tension': 0.1
+                    },
+                    {
+                        'label': 'Pending Listings',
+                        'data': [],
+                        'borderColor': '#F59E0B',
+                        'backgroundColor': 'rgba(245, 158, 11, 0.1)',
+                        'tension': 0.1
+                    }
+                ]
+            }
+        }
+        
+        # Convert YYYYMM to readable format and populate data
+        for row in data:
+            month_date = str(row['month_date'])
+            year = month_date[:4]
+            month = month_date[4:6]
+            label = f"{year}-{month}"
+            
+            result['data']['labels'].append(label)
+            result['data']['datasets'][0]['data'].append(row['active_listing_count'])
+            result['data']['datasets'][1]['data'].append(row['new_listing_count'])
+            result['data']['datasets'][2]['data'].append(row['pending_listing_count'])
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
