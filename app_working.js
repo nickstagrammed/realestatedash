@@ -95,11 +95,13 @@ class RealEstateDashboard {
             this.currentView = e.target.value;
             await this.switchView();
             
-            // Update header text
+            // Update header text and legend
             if (this.currentView === 'metro') {
-                dataInfo.textContent = 'Hover over metros for market summary • Click for detailed analysis';
+                dataInfo.textContent = 'Large circles: Major markets • Medium circles: Regional markets • Small circles: Local markets';
+                this.updateLegendForMetroView();
             } else {
                 dataInfo.textContent = 'Hover over states for market summary • Click for detailed analysis';
+                this.updateLegendForStateView();
             }
         });
     }
@@ -205,7 +207,7 @@ class RealEstateDashboard {
         // Load metro coordinates from SQLite database via API
         const metroCoordinates = await this.loadMetroCoordinatesFromDB();
         
-        const circles = [];
+        const markers = [];
         const missingCoordinates = [];
         
         console.log('=== METRO NAME MATCHING DEBUG ===');
@@ -228,8 +230,16 @@ class RealEstateDashboard {
             console.warn(`Missing coordinates for ${missingCoordinates.length} metros after mapping:`, missingCoordinates.slice(0, 5));
             console.log('First 5 missing metros:', missingCoordinates.slice(0, 5));
         }
+
+        // Categorize metros by listing count for shape assignment
+        const metroSizes = this.categorizeMetrosBySize(this.metroData);
+        console.log('Metro size categories:', {
+            large: metroSizes.large.length,
+            medium: metroSizes.medium.length, 
+            small: metroSizes.small.length
+        });
         
-        // Render metros using name mapping
+        // Render metros using name mapping with different shapes
         Object.keys(this.metroData).forEach(csvMetroName => {
             const mappedName = nameMapping[csvMetroName] || csvMetroName;
             const coords = metroCoordinates[mappedName];
@@ -239,37 +249,53 @@ class RealEstateDashboard {
             
             const beta5y = metroData.active_listing_count_beta_5y || 1;
             const color = this.getBetaColor(beta5y);
+            const activeListings = metroData.active_listing_count || 0;
             
-            // Use uniform radius for all metros
-            const radius = this.calculateCircleRadius(0, true); // true for uniform
+            // Determine circle size based on metro size category
+            let radius;
+            const zoom = this.map ? this.map.getZoom() : 4;
             
-            const circle = L.circle(coords, {
+            if (metroSizes.large.includes(csvMetroName)) {
+                // Large circles for top 5% metros
+                radius = Math.max(12000, 25000 * Math.pow(0.7, zoom - 4));
+            } else if (metroSizes.medium.includes(csvMetroName)) {
+                // Medium circles for next 10% metros  
+                radius = Math.max(8000, 18000 * Math.pow(0.7, zoom - 4));
+            } else {
+                // Small circles for remaining 85% metros (original size)
+                radius = Math.max(4000, 10000 * Math.pow(0.7, zoom - 4));
+            }
+            
+            const marker = L.circle(coords, {
                 color: '#ffffff',
                 fillColor: color,
                 fillOpacity: 0.8,
                 radius: radius,
-                weight: 3,
+                weight: 2,
                 interactive: true,
                 bubblingMouseEvents: false
             });
             
-            // Store data for zoom updates
-            circle._stateData = {
+            // Store data for zoom updates and interactions
+            marker._stateData = {
                 stateName: csvMetroName,
                 stateData: metroData,
-                listingCount: 0, // Not used for uniform sizing
-                color
+                listingCount: activeListings,
+                color,
+                markerType: 'circle',
+                sizeCategory: metroSizes.large.includes(csvMetroName) ? 'large' : 
+                             metroSizes.medium.includes(csvMetroName) ? 'medium' : 'small'
             };
             
-            circle.on({
+            marker.on({
                 mouseover: (e) => {
                     e.originalEvent.stopPropagation();
-                    circle.setStyle({ fillOpacity: 1.0, weight: 5 });
+                    this.highlightMarker(marker, true);
                     this.showPopup(e.latlng, csvMetroName, metroData);
                 },
                 mouseout: (e) => {
                     e.originalEvent.stopPropagation();
-                    circle.setStyle({ fillOpacity: 0.8, weight: 3 });
+                    this.highlightMarker(marker, false);
                     this.map.closePopup();
                 },
                 click: (e) => {
@@ -282,10 +308,10 @@ class RealEstateDashboard {
                 }
             });
             
-            circles.push(circle);
+            markers.push(marker);
         });
         
-        this.currentLayer = L.layerGroup(circles).addTo(this.map);
+        this.currentLayer = L.layerGroup(markers).addTo(this.map);
     }
     
     async loadMetroCoordinatesFromDB() {
@@ -553,6 +579,96 @@ class RealEstateDashboard {
     sleep(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
+
+    categorizeMetrosBySize(metroData) {
+        // Extract active listing counts and sort metros by size
+        const metrosWithCounts = Object.keys(metroData)
+            .map(name => ({
+                name,
+                count: metroData[name].active_listing_count || 0
+            }))
+            .sort((a, b) => b.count - a.count);
+
+        const totalMetros = metrosWithCounts.length;
+        const largeCount = Math.ceil(totalMetros * 0.05);  // Top 5% get triangles
+        const mediumCount = Math.ceil(totalMetros * 0.10); // Next 10% get squares
+        // Remaining 85% get circles
+
+        return {
+            large: metrosWithCounts.slice(0, largeCount).map(m => m.name),
+            medium: metrosWithCounts.slice(largeCount, largeCount + mediumCount).map(m => m.name),
+            small: metrosWithCounts.slice(largeCount + mediumCount).map(m => m.name)
+        };
+    }
+
+
+    highlightMarker(marker, highlight) {
+        // All metro markers are now circles
+        if (marker.setStyle) {
+            if (highlight) {
+                marker.setStyle({ fillOpacity: 1.0, weight: 4 });
+            } else {
+                marker.setStyle({ fillOpacity: 0.8, weight: 2 });
+            }
+        }
+    }
+
+    updateLegendForMetroView() {
+        const legend = document.querySelector('.legend');
+        if (!legend) return;
+
+        legend.innerHTML = `
+            <h4>Metro Market Size</h4>
+            <div class="legend-scale">
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #ffd700; border-radius: 50%; width: 24px; height: 24px;"></div>
+                    <span>Largest Markets (Top 5%)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #40e0d0; border-radius: 50%; width: 18px; height: 18px;"></div>
+                    <span>Medium Markets (Next 10%)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #00bfff; border-radius: 50%; width: 12px; height: 12px;"></div>
+                    <span>Small Markets (Remaining 85%)</span>
+                </div>
+                <div style="margin-top: 10px; font-size: 0.8rem; color: #aaa;">
+                    <em>Colors represent Beta values • Sizes represent market scale</em>
+                </div>
+            </div>
+        `;
+    }
+
+    updateLegendForStateView() {
+        const legend = document.querySelector('.legend');
+        if (!legend) return;
+
+        legend.innerHTML = `
+            <h4>Beta Scale</h4>
+            <div class="legend-scale">
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #00bfff;"></div>
+                    <span>&lt; 0.5 (Low Beta)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #40e0d0;"></div>
+                    <span>0.5 - 0.8</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #ffd700;"></div>
+                    <span>0.8 - 1.2 (Market Beta)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #ff6347;"></div>
+                    <span>1.2 - 1.5</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #ff1493;"></div>
+                    <span>&gt; 1.5 (High Beta)</span>
+                </div>
+            </div>
+        `;
+    }
     
     calculateCircleRadius(listingCount, isUniform = false) {
         const zoom = this.map ? this.map.getZoom() : 4;
@@ -563,11 +679,11 @@ class RealEstateDashboard {
         }
         
         // Variable size for state view - based on listing count
-        // Base radius that scales with zoom level
-        const baseRadius = Math.max(6000, 25000 * Math.pow(0.7, zoom - 4));
+        // Base radius that scales with zoom level (60% of original size)
+        const baseRadius = Math.max(6000, 25000 * Math.pow(0.7, zoom - 4)) * 0.6;
         
-        // Size multiplier based on listing count (smaller multiplier for better consistency)
-        const sizeMultiplier = Math.sqrt(listingCount) * Math.max(200, 800 * Math.pow(0.8, zoom - 4));
+        // Size multiplier based on listing count (60% of original size)
+        const sizeMultiplier = Math.sqrt(listingCount) * Math.max(200, 800 * Math.pow(0.8, zoom - 4)) * 0.6;
         
         return Math.max(baseRadius, sizeMultiplier);
     }
@@ -575,11 +691,27 @@ class RealEstateDashboard {
     updateCircleSizes() {
         if (!this.currentLayer) return;
         
-        this.currentLayer.eachLayer((circle) => {
-            if (circle._stateData && circle.setRadius) {
-                const isUniform = this.currentView === 'metro';
-                const newRadius = this.calculateCircleRadius(circle._stateData.listingCount, isUniform);
-                circle.setRadius(newRadius);
+        this.currentLayer.eachLayer((marker) => {
+            if (!marker._stateData || !marker.setRadius) return;
+            
+            if (this.currentView === 'metro') {
+                // Update metro circles based on their size category
+                const zoom = this.map ? this.map.getZoom() : 4;
+                let newRadius;
+                
+                if (marker._stateData.sizeCategory === 'large') {
+                    newRadius = Math.max(12000, 25000 * Math.pow(0.7, zoom - 4));
+                } else if (marker._stateData.sizeCategory === 'medium') {
+                    newRadius = Math.max(8000, 18000 * Math.pow(0.7, zoom - 4));
+                } else {
+                    newRadius = Math.max(4000, 10000 * Math.pow(0.7, zoom - 4));
+                }
+                
+                marker.setRadius(newRadius);
+            } else {
+                // State view - update circle radius based on listing count
+                const newRadius = this.calculateCircleRadius(marker._stateData.listingCount, false);
+                marker.setRadius(newRadius);
             }
         });
     }
@@ -680,9 +812,15 @@ class RealEstateDashboard {
             .openOn(this.map);
     }
     
-    showDetailPanel(stateName, stateData) {
+    showDetailPanel(locationName, locationData) {
         const detailContent = document.getElementById('detailContent');
-        if (!detailContent || !stateData) return;
+        if (!detailContent || !locationData) return;
+        
+        // Determine if this is state or metro data
+        const isState = this.stateData[locationName];
+        const isMetro = this.metroData[locationName];
+        const locationTypeLabel = isState ? 'STATE' : isMetro ? 'METRO AREA' : 'REGION';
+        const locationId = isState ? (locationData.state_id || 'N/A') : (locationData.cbsa_code || 'N/A');
         
         // Helper function to get change class
         const getChangeClass = (value) => {
@@ -693,8 +831,8 @@ class RealEstateDashboard {
         
         const content = `
             <div style="text-align: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #444;">
-                <h2 style="color: #ffffff; margin: 0; font-size: 1.4rem;">${stateName}</h2>
-                <span style="color: #aaa; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">${stateData.state_id || 'N/A'} • ${this.formatDate(stateData.last_updated)}</span>
+                <h2 style="color: #ffffff; margin: 0; font-size: 1.4rem;">${locationName}</h2>
+                <span style="color: #aaa; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">${locationTypeLabel}: ${locationId} • ${this.formatDate(locationData.last_updated)}</span>
             </div>
             
             <div class="beta-summary">
@@ -702,72 +840,72 @@ class RealEstateDashboard {
                 <div class="beta-timeline">
                     <div class="beta-item">
                         <div class="period">1 Year</div>
-                        <div class="value">${this.formatBeta(stateData.active_listing_count_beta_1y)}</div>
+                        <div class="value">${this.formatBeta(locationData.active_listing_count_beta_1y)}</div>
                     </div>
                     <div class="beta-item">
                         <div class="period">3 Year</div>
-                        <div class="value">${this.formatBeta(stateData.active_listing_count_beta_3y)}</div>
+                        <div class="value">${this.formatBeta(locationData.active_listing_count_beta_3y)}</div>
                     </div>
                     <div class="beta-item">
                         <div class="period">5 Year</div>
-                        <div class="value">${this.formatBeta(stateData.active_listing_count_beta_5y)}</div>
+                        <div class="value">${this.formatBeta(locationData.active_listing_count_beta_5y)}</div>
                     </div>
                 </div>
                 <div style="text-align: center; margin-top: 0.75rem; font-size: 0.7rem; color: #999;">
-                    ${this.getBetaInterpretation(stateData.active_listing_count_beta_5y)}
+                    ${this.getBetaInterpretation(locationData.active_listing_count_beta_5y)}
                 </div>
             </div>
             
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto auto; gap: 1rem; margin-bottom: 1rem;">
                 <!-- Position 11-12: Active Listings (spans 2 columns) -->
-                <div class="metric-card" style="grid-column: 1 / 3; display: flex; flex-direction: column; cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${stateName}', 'active_listing_count')">
+                <div class="metric-card" style="grid-column: 1 / 3; display: flex; flex-direction: column; cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${locationName}', 'active_listing_count')">
                     <h5>Active Listings</h5>
-                    <div class="metric-value">${this.formatValue(stateData.active_listing_count)}</div>
+                    <div class="metric-value">${this.formatValue(locationData.active_listing_count)}</div>
                     <div style="flex-grow: 1; display: flex; align-items: center;">
                         <div class="metric-change" style="width: 85%;">
-                            <span class="${getChangeClass(stateData.active_listing_count_mm)}">MoM: ${this.formatPercent(stateData.active_listing_count_mm)}%</span>
-                            <span class="${getChangeClass(stateData.active_listing_count_yy)}">YoY: ${this.formatPercent(stateData.active_listing_count_yy)}%</span>
+                            <span class="${getChangeClass(locationData.active_listing_count_mm)}">MoM: ${this.formatPercent(locationData.active_listing_count_mm)}%</span>
+                            <span class="${getChangeClass(locationData.active_listing_count_yy)}">YoY: ${this.formatPercent(locationData.active_listing_count_yy)}%</span>
                         </div>
                     </div>
                 </div>
                 
                 <!-- Position 13: Median Price -->
-                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${stateName}', 'median_listing_price')">
+                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${locationName}', 'median_listing_price')">
                     <h5>Median Price</h5>
-                    <div class="metric-value" style="color: #ffd700;">$${this.formatPrice(stateData.median_listing_price)}</div>
+                    <div class="metric-value" style="color: #ffd700;">$${this.formatPrice(locationData.median_listing_price)}</div>
                     <div class="metric-change">
-                        <span class="${getChangeClass(stateData.median_listing_price_mm)}">MoM: ${this.formatPercent(stateData.median_listing_price_mm)}%</span>
-                        <span class="${getChangeClass(stateData.median_listing_price_yy)}">YoY: ${this.formatPercent(stateData.median_listing_price_yy)}%</span>
+                        <span class="${getChangeClass(locationData.median_listing_price_mm)}">MoM: ${this.formatPercent(locationData.median_listing_price_mm)}%</span>
+                        <span class="${getChangeClass(locationData.median_listing_price_yy)}">YoY: ${this.formatPercent(locationData.median_listing_price_yy)}%</span>
                     </div>
                 </div>
                 
                 <!-- Position 21: New Listings -->
-                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${stateName}', 'new_listing_count')">
+                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${locationName}', 'new_listing_count')">
                     <h5>New Listings</h5>
-                    <div class="metric-value">${this.formatValue(stateData.new_listing_count)}</div>
+                    <div class="metric-value">${this.formatValue(locationData.new_listing_count)}</div>
                     <div class="metric-change">
-                        <span class="${getChangeClass(stateData.new_listing_count_mm)}">MoM: ${this.formatPercent(stateData.new_listing_count_mm)}%</span>
-                        <span class="${getChangeClass(stateData.new_listing_count_yy)}">YoY: ${this.formatPercent(stateData.new_listing_count_yy)}%</span>
+                        <span class="${getChangeClass(locationData.new_listing_count_mm)}">MoM: ${this.formatPercent(locationData.new_listing_count_mm)}%</span>
+                        <span class="${getChangeClass(locationData.new_listing_count_yy)}">YoY: ${this.formatPercent(locationData.new_listing_count_yy)}%</span>
                     </div>
                 </div>
                 
                 <!-- Position 22: Pending Sale -->
-                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${stateName}', 'pending_listing_count')">
+                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${locationName}', 'pending_listing_count')">
                     <h5>Pending Sale</h5>
-                    <div class="metric-value">${this.formatValue(stateData.pending_listing_count)}</div>
+                    <div class="metric-value">${this.formatValue(locationData.pending_listing_count)}</div>
                     <div class="metric-change">
-                        <span class="${getChangeClass(stateData.pending_listing_count_mm)}">MoM: ${this.formatPercent(stateData.pending_listing_count_mm)}%</span>
-                        <span class="${getChangeClass(stateData.pending_listing_count_yy)}">YoY: ${this.formatPercent(stateData.pending_listing_count_yy)}%</span>
+                        <span class="${getChangeClass(locationData.pending_listing_count_mm)}">MoM: ${this.formatPercent(locationData.pending_listing_count_mm)}%</span>
+                        <span class="${getChangeClass(locationData.pending_listing_count_yy)}">YoY: ${this.formatPercent(locationData.pending_listing_count_yy)}%</span>
                     </div>
                 </div>
                 
                 <!-- Position 23: Median Days -->
-                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${stateName}', 'median_days_on_market')">
+                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${locationName}', 'median_days_on_market')">
                     <h5>Median Days</h5>
-                    <div class="metric-value">${this.formatValue(stateData.median_days_on_market)}</div>
+                    <div class="metric-value">${this.formatValue(locationData.median_days_on_market)}</div>
                     <div class="metric-change">
-                        <span class="${getChangeClass(stateData.median_days_on_market_mm)}">MoM: ${this.formatPercent(stateData.median_days_on_market_mm)}%</span>
-                        <span class="${getChangeClass(stateData.median_days_on_market_yy)}">YoY: ${this.formatPercent(stateData.median_days_on_market_yy)}%</span>
+                        <span class="${getChangeClass(locationData.median_days_on_market_mm)}">MoM: ${this.formatPercent(locationData.median_days_on_market_mm)}%</span>
+                        <span class="${getChangeClass(locationData.median_days_on_market_yy)}">YoY: ${this.formatPercent(locationData.median_days_on_market_yy)}%</span>
                     </div>
                 </div>
             </div>
@@ -789,6 +927,12 @@ class RealEstateDashboard {
         `;
         
         detailContent.innerHTML = content;
+        
+        // Show trends section for both states and metros
+        const trendsSection = document.getElementById('trendsSection');
+        if (trendsSection) {
+            trendsSection.style.display = 'block';
+        }
     }
     
     getBetaInterpretation(beta) {
