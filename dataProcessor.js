@@ -394,18 +394,21 @@ class DataProcessor {
                 new_listing_count: latest.new_listing_count || 0,
                 pending_listing_count: latest.pending_listing_count || 0,
                 median_listing_price: latest.median_listing_price || 0,
+                median_days_on_market: latest.median_days_on_market || 0,
                 
                 // Month over month changes (use existing columns if available, otherwise calculate)
                 active_listing_count_mm: latest.active_listing_count_mm || 0,
                 new_listing_count_mm: latest.new_listing_count_mm || 0,
                 pending_listing_count_mm: latest.pending_listing_count_mm || 0,
                 median_listing_price_mm: latest.median_listing_price_mm || medianChanges.mom || 0,
+                median_days_on_market_mm: latest.median_days_on_market_mm || 0,
                 
                 // Year over year changes (use existing columns if available, otherwise calculate)
                 active_listing_count_yy: latest.active_listing_count_yy || 0,
                 new_listing_count_yy: latest.new_listing_count_yy || 0,
                 pending_listing_count_yy: latest.pending_listing_count_yy || 0,
                 median_listing_price_yy: latest.median_listing_price_yy || medianChanges.yoy || 0,
+                median_days_on_market_yy: latest.median_days_on_market_yy || 0,
                 
                 // Beta values
                 active_listing_count_beta_5y: stateInfo.betas?.active_listing_count?.beta_5y || 0,
@@ -455,18 +458,21 @@ class DataProcessor {
                 new_listing_count: latest.new_listing_count || 0,
                 pending_listing_count: latest.pending_listing_count || 0,
                 median_listing_price: latest.median_listing_price || 0,
+                median_days_on_market: latest.median_days_on_market || 0,
                 
                 // Month over month changes (use existing columns if available, otherwise calculate)
                 active_listing_count_mm: latest.active_listing_count_mm || 0,
                 new_listing_count_mm: latest.new_listing_count_mm || 0,
                 pending_listing_count_mm: latest.pending_listing_count_mm || 0,
                 median_listing_price_mm: latest.median_listing_price_mm || medianChanges.mom || 0,
+                median_days_on_market_mm: latest.median_days_on_market_mm || 0,
                 
                 // Year over year changes (use existing columns if available, otherwise calculate)
                 active_listing_count_yy: latest.active_listing_count_yy || 0,
                 new_listing_count_yy: latest.new_listing_count_yy || 0,
                 pending_listing_count_yy: latest.pending_listing_count_yy || 0,
                 median_listing_price_yy: latest.median_listing_price_yy || medianChanges.yoy || 0,
+                median_days_on_market_yy: latest.median_days_on_market_yy || 0,
                 
                 // Beta values
                 active_listing_count_beta_5y: metroInfo.betas?.active_listing_count?.beta_5y || 0,
@@ -538,5 +544,51 @@ class DataProcessor {
         });
         
         return { mom, yoy };
+    }
+    
+    // Get historical time series data for a specific state and metric
+    getStateHistoricalData(stateName, metric, monthsBack = 60) {
+        const stateTimeSeries = this.stateData[stateName];
+        if (!stateTimeSeries || stateTimeSeries.length === 0) {
+            return [];
+        }
+        
+        // Take the most recent monthsBack months, already sorted by date descending
+        const recentData = stateTimeSeries.slice(0, monthsBack);
+        
+        // Reverse to get chronological order (oldest to newest)
+        return recentData.reverse().map(row => ({
+            date: row.month_date_yyyymm,
+            label: this.formatDateLabel(row.month_date_yyyymm),
+            value: parseFloat(row[metric]) || 0
+        }));
+    }
+    
+    // Format YYYYMM to readable date label
+    formatDateLabel(yyyymm) {
+        const dateStr = String(yyyymm);
+        const year = dateStr.substring(0, 4);
+        const month = dateStr.substring(4, 6);
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return `${monthNames[parseInt(month) - 1]} ${year}`;
+    }
+    
+    // Get historical time series data for a specific metro and metric
+    getMetroHistoricalData(metroName, metric, monthsBack = 60) {
+        const metroTimeSeries = this.metroData[metroName];
+        if (!metroTimeSeries || metroTimeSeries.length === 0) {
+            return [];
+        }
+        
+        // Take the most recent monthsBack months, already sorted by date descending
+        const recentData = metroTimeSeries.slice(0, monthsBack);
+        
+        // Reverse to get chronological order (oldest to newest)
+        return recentData.reverse().map(row => ({
+            date: row.month_date_yyyymm,
+            label: this.formatDateLabel(row.month_date_yyyymm),
+            value: parseFloat(row[metric]) || 0
+        }));
     }
 }

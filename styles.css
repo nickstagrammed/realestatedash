@@ -247,6 +247,13 @@ body {
     margin: 1rem 0;
 }
 
+/* 5-card layout: 2-2-1 pattern */
+.metric-grid .metric-card:nth-child(5) {
+    grid-column: 1 / -1;
+    max-width: 50%;
+    margin: 0 auto;
+}
+
 .metric-card {
     background: #2a2a2a;
     padding: 0.75rem;
@@ -449,4 +456,118 @@ body {
     text-align: center;
     padding: 1rem;
     font-size: 0.9rem;
+}
+
+/* Lightbox Modal for Metric Trends */
+.lightbox-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+}
+
+.lightbox-overlay.active {
+    display: flex;
+}
+
+.lightbox-modal {
+    background: #1a1a1a;
+    border-radius: 12px;
+    border: 1px solid #444;
+    padding: 1.5rem;
+    max-width: 700px;
+    width: 85%;
+    max-height: 85vh;
+    overflow-y: auto;
+    position: relative;
+    box-shadow: 0 10px 30px rgba(255, 255, 255, 0.1);
+}
+
+.lightbox-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0.5rem;
+    border-radius: 4px;
+    transition: background 0.2s ease;
+}
+
+.lightbox-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.lightbox-title {
+    color: #fff;
+    font-size: 1.3rem;
+    margin-bottom: 0.25rem;
+    padding-right: 3rem;
+}
+
+.lightbox-subtitle {
+    color: #aaa;
+    font-size: 0.9rem;
+    margin-bottom: 1.25rem;
+}
+
+.lightbox-chart-container {
+    background: #0a0a0a;
+    border-radius: 8px;
+    padding: 1rem;
+    border: 1px solid #333;
+    margin-bottom: 1rem;
+}
+
+.lightbox-chart-container canvas {
+    width: 100% !important;
+    height: 300px !important;
+}
+
+.lightbox-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+
+.lightbox-stat {
+    background: #2a2a2a;
+    padding: 0.75rem;
+    border-radius: 6px;
+    text-align: center;
+}
+
+.lightbox-stat-label {
+    color: #aaa;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+}
+
+.lightbox-stat-value {
+    color: #fff;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.metric-card {
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
 }
