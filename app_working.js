@@ -782,15 +782,35 @@ class RealEstateDashboard {
         try {
             let trendData;
             
-            if (level === 'state') {
-                // Use API for state data
-                const response = await fetch(`${this.API_BASE_URL}/trends/${level}/${encodeURIComponent(identifier)}`);
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                trendData = await response.json();
-            } else if (level === 'metro') {
-                // Extract data directly from loaded metro data
-                trendData = this.extractMetroTrendData(identifier);
+            // Use SQLite API for both state and metro data
+            let apiIdentifier = identifier;
+            
+            if (level === 'metro') {
+                // For metros, we need to get the CBSA code from the formatted data
+                const metroInfo = this.metroData[identifier];
+                console.log(`Looking up metro: ${identifier}`);
+                console.log('Metro info found:', metroInfo);
+                
+                if (metroInfo && metroInfo.cbsa_code) {
+                    apiIdentifier = metroInfo.cbsa_code;
+                    console.log(`Using CBSA code: ${apiIdentifier}`);
+                } else {
+                    // Fallback: try to get CBSA code from raw data
+                    const rawMetroData = this.dataProcessor.metroData[identifier];
+                    if (rawMetroData && rawMetroData[0] && rawMetroData[0].cbsa_code) {
+                        apiIdentifier = rawMetroData[0].cbsa_code;
+                        console.log(`Using CBSA code from raw data: ${apiIdentifier}`);
+                    } else {
+                        console.log('Available metros in formatted data:', Object.keys(this.metroData).slice(0, 5));
+                        console.log('Available metros in raw data:', Object.keys(this.dataProcessor.metroData).slice(0, 5));
+                        throw new Error(`CBSA code not found for metro: ${identifier}`);
+                    }
+                }
             }
+            
+            const response = await fetch(`${this.API_BASE_URL}/trends/${level}/${encodeURIComponent(apiIdentifier)}`);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            trendData = await response.json();
             
             if (trendData) {
                 this.renderTrendChart(trendData);
@@ -804,65 +824,6 @@ class RealEstateDashboard {
         }
     }
     
-    extractMetroTrendData(metroName) {
-        // Get the raw time series data from the dataProcessor (not formatted data)
-        const metroTimeSeries = this.dataProcessor.metroData[metroName];
-        if (!metroTimeSeries || !Array.isArray(metroTimeSeries) || metroTimeSeries.length === 0) {
-            console.error('No metro time series data found for:', metroName);
-            console.log('Available metros:', Object.keys(this.dataProcessor.metroData).slice(0, 5));
-            return null;
-        }
-        
-        // Filter for 5-year range (last 60 months)
-        const fiveYearData = metroTimeSeries.slice(0, 60).reverse(); // Reverse to get chronological order
-        
-        const result = {
-            level: 'metro',
-            identifier: metroName,
-            dateRange: '5-year trend from loaded data',
-            data: {
-                labels: [],
-                datasets: [
-                    {
-                        label: 'Active Listings',
-                        data: [],
-                        borderColor: '#3B82F6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        tension: 0.1
-                    },
-                    {
-                        label: 'New Listings',
-                        data: [],
-                        borderColor: '#10B981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        tension: 0.1
-                    },
-                    {
-                        label: 'Pending Listings',
-                        data: [],
-                        borderColor: '#F59E0B',
-                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                        tension: 0.1
-                    }
-                ]
-            }
-        };
-        
-        // Populate the chart data
-        fiveYearData.forEach(monthData => {
-            const monthDate = String(monthData.month_date_yyyymm);
-            const year = monthDate.substring(0, 4);
-            const month = monthDate.substring(4, 6);
-            const label = `${year}-${month}`;
-            
-            result.data.labels.push(label);
-            result.data.datasets[0].data.push(monthData.active_listing_count || 0);
-            result.data.datasets[1].data.push(monthData.new_listing_count || 0);
-            result.data.datasets[2].data.push(monthData.pending_listing_count || 0);
-        });
-        
-        return result;
-    }
     
     showTrendLoading() {
         const chartContainer = document.querySelector('.trend-chart-container');
