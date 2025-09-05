@@ -371,6 +371,13 @@ class RealEstateDashboard {
             'San Francisco-Oakland-Berkeley, CA': 'San Francisco-Oakland-Fremont, CA Metro Area',
             'San Francisco-Oakland-Berkeley': 'San Francisco-Oakland-Fremont, CA Metro Area',
             
+            // Lafayette variations (ensure correct mapping)
+            'Lafayette, LA': 'Lafayette, LA Metro Area',
+            'Lafayette-West Lafayette, IN': 'Lafayette-West Lafayette, IN Metro Area',
+            
+            // Charleston variations (ensure correct mapping)
+            'Charleston-North Charleston, SC': 'Charleston-North Charleston, SC Metro Area',
+            
             // Other common variations from old naming
             'Birmingham-Hoover, AL': 'Birmingham, AL Metro Area',
             'Nashville-Davidson-Murfreesboro-Franklin, TN': 'Nashville-Davidson--Murfreesboro--Franklin, TN Metro Area',
@@ -585,6 +592,54 @@ class RealEstateDashboard {
         return '#ff1493';
     }
     
+    createMetroMarker(coords, color, radius, householdRank) {
+        // Determine marker type based on household rank (1 = largest metro)
+        // Triangle: Top 50 metros (1-50)
+        // Square: Mid-tier metros (51-200)  
+        // Circle: Smaller metros (201+)
+        
+        const baseOptions = {
+            color: '#ffffff',
+            fillColor: color,
+            fillOpacity: 0.8,
+            weight: 3,
+            interactive: true,
+            bubblingMouseEvents: false
+        };
+        
+        if (householdRank <= 50) {
+            // Large metros - Triangle (using polygon)
+            const size = radius / 1000; // Convert radius to appropriate polygon size
+            const height = size * 1.2;
+            const width = size;
+            
+            const triangle = [
+                [coords[0] + height/2, coords[1]], // top
+                [coords[0] - height/2, coords[1] - width/2], // bottom left  
+                [coords[0] - height/2, coords[1] + width/2]  // bottom right
+            ];
+            
+            return L.polygon(triangle, baseOptions);
+            
+        } else if (householdRank <= 200) {
+            // Mid-tier metros - Square (using rectangle)
+            const size = radius / 1200; // Convert radius to appropriate size
+            const bounds = [
+                [coords[0] - size/2, coords[1] - size/2], // southwest
+                [coords[0] + size/2, coords[1] + size/2]  // northeast
+            ];
+            
+            return L.rectangle(bounds, baseOptions);
+            
+        } else {
+            // Smaller metros - Circle (original)
+            return L.circle(coords, {
+                ...baseOptions,
+                radius: radius
+            });
+        }
+    }
+    
     showPopup(latlng, stateName, stateData) {
         const popupContent = `
             <div class="popup-title" style="color: #ffffff; font-weight: bold; margin-bottom: 0.75rem; text-align: center;">${stateName}</div>
@@ -663,17 +718,31 @@ class RealEstateDashboard {
                 </div>
             </div>
             
-            <div class="metric-grid">
-                <div class="metric-card">
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto auto; gap: 1rem; margin-bottom: 1rem;">
+                <!-- Position 11-12: Active Listings (spans 2 columns) -->
+                <div class="metric-card" style="grid-column: 1 / 3; display: flex; flex-direction: column; cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${stateName}', 'active_listing_count')">
                     <h5>Active Listings</h5>
                     <div class="metric-value">${this.formatValue(stateData.active_listing_count)}</div>
-                    <div class="metric-change">
-                        <span class="${getChangeClass(stateData.active_listing_count_mm)}">MoM: ${this.formatPercent(stateData.active_listing_count_mm)}%</span>
-                        <span class="${getChangeClass(stateData.active_listing_count_yy)}">YoY: ${this.formatPercent(stateData.active_listing_count_yy)}%</span>
+                    <div style="flex-grow: 1; display: flex; align-items: center;">
+                        <div class="metric-change" style="width: 85%;">
+                            <span class="${getChangeClass(stateData.active_listing_count_mm)}">MoM: ${this.formatPercent(stateData.active_listing_count_mm)}%</span>
+                            <span class="${getChangeClass(stateData.active_listing_count_yy)}">YoY: ${this.formatPercent(stateData.active_listing_count_yy)}%</span>
+                        </div>
                     </div>
                 </div>
                 
-                <div class="metric-card">
+                <!-- Position 13: Median Price -->
+                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${stateName}', 'median_listing_price')">
+                    <h5>Median Price</h5>
+                    <div class="metric-value" style="color: #ffd700;">$${this.formatPrice(stateData.median_listing_price)}</div>
+                    <div class="metric-change">
+                        <span class="${getChangeClass(stateData.median_listing_price_mm)}">MoM: ${this.formatPercent(stateData.median_listing_price_mm)}%</span>
+                        <span class="${getChangeClass(stateData.median_listing_price_yy)}">YoY: ${this.formatPercent(stateData.median_listing_price_yy)}%</span>
+                    </div>
+                </div>
+                
+                <!-- Position 21: New Listings -->
+                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${stateName}', 'new_listing_count')">
                     <h5>New Listings</h5>
                     <div class="metric-value">${this.formatValue(stateData.new_listing_count)}</div>
                     <div class="metric-change">
@@ -682,7 +751,8 @@ class RealEstateDashboard {
                     </div>
                 </div>
                 
-                <div class="metric-card">
+                <!-- Position 22: Pending Sale -->
+                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${stateName}', 'pending_listing_count')">
                     <h5>Pending Sale</h5>
                     <div class="metric-value">${this.formatValue(stateData.pending_listing_count)}</div>
                     <div class="metric-change">
@@ -691,12 +761,13 @@ class RealEstateDashboard {
                     </div>
                 </div>
                 
-                <div class="metric-card">
-                    <h5>Median Price</h5>
-                    <div class="metric-value" style="color: #ffd700;">$${this.formatPrice(stateData.median_listing_price)}</div>
+                <!-- Position 23: Median Days -->
+                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${stateName}', 'median_days_on_market')">
+                    <h5>Median Days</h5>
+                    <div class="metric-value">${this.formatValue(stateData.median_days_on_market)}</div>
                     <div class="metric-change">
-                        <span class="${getChangeClass(stateData.median_listing_price_mm)}">MoM: ${this.formatPercent(stateData.median_listing_price_mm)}%</span>
-                        <span class="${getChangeClass(stateData.median_listing_price_yy)}">YoY: ${this.formatPercent(stateData.median_listing_price_yy)}%</span>
+                        <span class="${getChangeClass(stateData.median_days_on_market_mm)}">MoM: ${this.formatPercent(stateData.median_days_on_market_mm)}%</span>
+                        <span class="${getChangeClass(stateData.median_days_on_market_yy)}">YoY: ${this.formatPercent(stateData.median_days_on_market_yy)}%</span>
                     </div>
                 </div>
             </div>
@@ -782,28 +853,42 @@ class RealEstateDashboard {
         try {
             let trendData;
             
-            // Use SQLite API for both state and metro data
+            // Use SQLite API for both state and metro data - v2
             let apiIdentifier = identifier;
+            let displayName = identifier; // Keep original name for display
             
             if (level === 'metro') {
-                // For metros, we need to get the CBSA code from the formatted data
-                const metroInfo = this.metroData[identifier];
-                console.log(`Looking up metro: ${identifier}`);
-                console.log('Metro info found:', metroInfo);
-                
-                if (metroInfo && metroInfo.cbsa_code) {
-                    apiIdentifier = metroInfo.cbsa_code;
-                    console.log(`Using CBSA code: ${apiIdentifier}`);
+                // Check if identifier is already a CBSA code (numeric)
+                console.log(`Checking identifier type: "${identifier}" (type: ${typeof identifier})`);
+                if (/^\d+$/.test(String(identifier))) {
+                    apiIdentifier = identifier;
+                    // Find the metro name for this CBSA code
+                    const metroEntry = Object.entries(this.metroData).find(([name, info]) => info.cbsa_code == identifier);
+                    if (metroEntry) {
+                        displayName = metroEntry[0];
+                    }
+                    console.log(`✅ Identifier is already CBSA code: ${apiIdentifier}, display name: ${displayName}`);
                 } else {
-                    // Fallback: try to get CBSA code from raw data
-                    const rawMetroData = this.dataProcessor.metroData[identifier];
-                    if (rawMetroData && rawMetroData[0] && rawMetroData[0].cbsa_code) {
-                        apiIdentifier = rawMetroData[0].cbsa_code;
-                        console.log(`Using CBSA code from raw data: ${apiIdentifier}`);
+                    displayName = identifier; // Use the metro name as display name
+                    // For metros, we need to get the CBSA code from the formatted data
+                    const metroInfo = this.metroData[identifier];
+                    console.log(`Looking up metro: ${identifier}`);
+                    console.log('Metro info found:', metroInfo);
+                    
+                    if (metroInfo && metroInfo.cbsa_code) {
+                        apiIdentifier = metroInfo.cbsa_code;
+                        console.log(`Using CBSA code: ${apiIdentifier}`);
                     } else {
-                        console.log('Available metros in formatted data:', Object.keys(this.metroData).slice(0, 5));
-                        console.log('Available metros in raw data:', Object.keys(this.dataProcessor.metroData).slice(0, 5));
-                        throw new Error(`CBSA code not found for metro: ${identifier}`);
+                        // Fallback: try to get CBSA code from raw data
+                        const rawMetroData = this.dataProcessor.metroData[identifier];
+                        if (rawMetroData && rawMetroData[0] && rawMetroData[0].cbsa_code) {
+                            apiIdentifier = rawMetroData[0].cbsa_code;
+                            console.log(`Using CBSA code from raw data: ${apiIdentifier}`);
+                        } else {
+                            console.log('Available metros in formatted data:', Object.keys(this.metroData).slice(0, 5));
+                            console.log('Available metros in raw data:', Object.keys(this.dataProcessor.metroData).slice(0, 5));
+                            throw new Error(`CBSA code not found for metro: ${identifier}`);
+                        }
                     }
                 }
             }
@@ -813,6 +898,10 @@ class RealEstateDashboard {
             trendData = await response.json();
             
             if (trendData) {
+                // Override the identifier in trendData with our display name
+                if (level === 'metro') {
+                    trendData.identifier = displayName;
+                }
                 this.renderTrendChart(trendData);
             } else {
                 throw new Error('No trend data available');
@@ -951,10 +1040,219 @@ class RealEstateDashboard {
             }
         });
     }
+    
+    
+    // Show the trend lightbox for a specific metric
+    showTrendLightbox(locationName, metric) {
+        // Check if data processor is available
+        if (!this.dataProcessor) {
+            console.error('Data processor not available yet');
+            return;
+        }
+        
+        // Determine if this is state or metro data
+        const stateData = this.stateData[locationName];
+        const metroData = this.metroData[locationName];
+        const isMetro = !stateData && metroData;
+        const data = stateData || metroData;
+        
+        if (!data) {
+            console.error(`No data found for: ${locationName}`);
+            return;
+        }
+        
+        const overlay = document.getElementById('trendLightbox');
+        const title = document.getElementById('lightboxTitle');
+        const subtitle = document.getElementById('lightboxSubtitle');
+        const statsContainer = document.getElementById('lightboxStats');
+        
+        // Set title and subtitle
+        const metricLabels = {
+            'active_listing_count': 'Active Listings',
+            'new_listing_count': 'New Listings', 
+            'pending_listing_count': 'Pending Sale',
+            'median_listing_price': 'Median Listing Price',
+            'median_days_on_market': 'Median Days on Market'
+        };
+        
+        const locationLabel = isMetro ? `${locationName} Metro` : locationName;
+        title.textContent = `${metricLabels[metric]} - 5 Year Trend`;
+        subtitle.textContent = `${locationLabel} • ${this.formatDate(data.last_updated)}`;
+        
+        // Get real historical data from CSV
+        const trendData = isMetro 
+            ? this.dataProcessor.getMetroHistoricalData(locationName, metric, 60)
+            : this.dataProcessor.getStateHistoricalData(locationName, metric, 60);
+        
+        // Show overlay
+        overlay.classList.add('active');
+        
+        // Render chart
+        setTimeout(() => {
+            this.renderLightboxChart(trendData, metric, locationName);
+            this.populateTrendStats(data, metric, trendData, statsContainer);
+        }, 100);
+    }
+    
+    // Render the lightbox trend chart using Chart.js
+    renderLightboxChart(trendData, metric, stateName) {
+        const canvas = document.getElementById('lightboxChart');
+        const ctx = canvas.getContext('2d');
+        
+        // Destroy existing chart if it exists
+        if (window.trendChart) {
+            window.trendChart.destroy();
+        }
+        
+        const isPrice = metric === 'median_listing_price';
+        const isDays = metric === 'median_days_on_market';
+        let color;
+        if (isPrice) {
+            color = '#ffd700';
+        } else if (isDays) {
+            color = '#ff6347';
+        } else {
+            color = '#00ff7f';
+        }
+        
+        window.trendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: trendData.map(d => d.label),
+                datasets: [{
+                    label: metric.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                    data: trendData.map(d => d.value),
+                    borderColor: color,
+                    backgroundColor: color + '20',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: color,
+                    pointBorderColor: '#ffffff',
+                    pointBorderWidth: 1,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    title: {
+                        display: false
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: '#ffffff',
+                            maxTicksLimit: 12
+                        },
+                        grid: {
+                            color: '#333333'
+                        }
+                    },
+                    y: {
+                        ticks: {
+                            color: '#ffffff',
+                            callback: function(value) {
+                                if (isPrice) {
+                                    return '$' + Math.round(value).toLocaleString();
+                                } else if (isDays) {
+                                    return Math.round(value) + ' days';
+                                }
+                                return Math.round(value).toLocaleString();
+                            }
+                        },
+                        grid: {
+                            color: '#333333'
+                        }
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
+        });
+    }
+    
+    // Populate trend statistics
+    populateTrendStats(stateData, metric, trendData, container) {
+        const currentValue = stateData[metric];
+        const oldestValue = trendData[0].value;
+        const newestValue = trendData[trendData.length - 1].value;
+        const changePercent = ((newestValue - oldestValue) / oldestValue * 100).toFixed(1);
+        const isPrice = metric === 'median_listing_price';
+        const isDays = metric === 'median_days_on_market';
+        
+        // Calculate additional stats
+        const maxValue = Math.max(...trendData.map(d => d.value));
+        const minValue = Math.min(...trendData.map(d => d.value));
+        const avgValue = Math.round(trendData.reduce((sum, d) => sum + d.value, 0) / trendData.length);
+        
+        const formatValue = (value) => {
+            if (isPrice) {
+                return '$' + Math.round(value).toLocaleString();
+            } else if (isDays) {
+                return Math.round(value) + ' days';
+            }
+            return Math.round(value).toLocaleString();
+        };
+        
+        container.innerHTML = `
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Current Value</div>
+                <div class="lightbox-stat-value">${formatValue(currentValue)}</div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">5-Year Change</div>
+                <div class="lightbox-stat-value" style="color: ${changePercent > 0 ? '#00ff7f' : '#ff6b6b'}">${changePercent > 0 ? '+' : ''}${changePercent}%</div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">5-Year High</div>
+                <div class="lightbox-stat-value">${formatValue(maxValue)}</div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">5-Year Low</div>
+                <div class="lightbox-stat-value">${formatValue(minValue)}</div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">5-Year Average</div>
+                <div class="lightbox-stat-value">${formatValue(avgValue)}</div>
+            </div>
+        `;
+    }
 }
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', function() {
     const dashboard = new RealEstateDashboard();
+    
+    // Bind methods to ensure 'this' context is preserved
+    dashboard.showTrendLightbox = dashboard.showTrendLightbox.bind(dashboard);
+    
     window.dashboard = dashboard;
+    
+    // Debug logging
+    console.log('Dashboard initialized:', {
+        dashboard: dashboard,
+        dataProcessor: dashboard.dataProcessor,
+        hasShowTrendLightbox: typeof dashboard.showTrendLightbox === 'function'
+    });
 });
+
+// Global function to close the trend lightbox
+function closeTrendLightbox() {
+    const overlay = document.getElementById('trendLightbox');
+    overlay.classList.remove('active');
+    
+    // Destroy the chart to prevent memory leaks
+    if (window.trendChart) {
+        window.trendChart.destroy();
+        window.trendChart = null;
+    }
+}
