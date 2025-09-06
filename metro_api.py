@@ -268,7 +268,7 @@ def get_trend_data(level, identifier):
                         'tension': 0.1
                     },
                     {
-                        'label': 'Pending Listings',
+                        'label': 'Pending Sale',
                         'data': [],
                         'borderColor': '#F59E0B',
                         'backgroundColor': 'rgba(245, 158, 11, 0.1)',
@@ -289,6 +289,132 @@ def get_trend_data(level, identifier):
             result['data']['datasets'][0]['data'].append(row['active_listing_count'])
             result['data']['datasets'][1]['data'].append(row['new_listing_count'])
             result['data']['datasets'][2]['data'].append(row['pending_listing_count'])
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/betas/metro/<cbsa_code>', methods=['GET'])
+def get_metro_betas(cbsa_code):
+    """Get beta calculations for a specific metro area"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database not found'}), 404
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM metro_betas WHERE cbsa_code = ?
+        ''', (cbsa_code,))
+        
+        metro_beta = cursor.fetchone()
+        conn.close()
+        
+        if not metro_beta:
+            return jsonify({'error': f'Metro not found: {cbsa_code}'}), 404
+        
+        # Convert to dictionary
+        result = dict(metro_beta)
+        return jsonify(result)
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/betas/state/<state>', methods=['GET'])
+def get_state_betas(state):
+    """Get beta calculations for a specific state"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database not found'}), 404
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT * FROM state_betas WHERE state = ?
+        ''', (state,))
+        
+        state_beta = cursor.fetchone()
+        conn.close()
+        
+        if not state_beta:
+            return jsonify({'error': f'State not found: {state}'}), 404
+        
+        # Convert to dictionary
+        result = dict(state_beta)
+        return jsonify(result)
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/coordinates/states', methods=['GET'])
+def get_state_coordinates():
+    """Get coordinates for all states"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database not found'}), 404
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT state, state_id, latitude, longitude
+            FROM state_coordinates
+            ORDER BY state
+        ''')
+        
+        states = cursor.fetchall()
+        conn.close()
+        
+        # Format for map usage
+        result = {}
+        for state in states:
+            result[state['state']] = [state['latitude'], state['longitude']]
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/betas/metro', methods=['GET'])
+def get_all_metro_betas():
+    """Get beta calculations for all metro areas"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database not found'}), 404
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT cbsa_code, cbsa_title, active_listing_beta_5y,
+                   latest_active_count, latest_new_count, latest_pending_count,
+                   active_mm_change
+            FROM metro_betas
+            ORDER BY cbsa_title
+        ''')
+        
+        metros = cursor.fetchall()
+        conn.close()
+        
+        # Format for dashboard usage
+        result = {}
+        for metro in metros:
+            result[metro['cbsa_title']] = {
+                'cbsa_code': metro['cbsa_code'],
+                'active_listing_count_beta_5y': metro['active_listing_beta_5y'],
+                'active_listing_count': metro['latest_active_count'],
+                'new_listing_count': metro['latest_new_count'],
+                'pending_listing_count': metro['latest_pending_count'],
+                'active_listing_count_mm': metro['active_mm_change'],
+                'active_listing_count_yy': 0  # Placeholder for now
+            }
         
         return jsonify(result)
         

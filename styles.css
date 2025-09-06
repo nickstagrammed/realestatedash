@@ -156,6 +156,11 @@ body {
     color: #cccccc;
 }
 
+.legend-item .legend-color {
+    flex-shrink: 0;
+    align-self: center;
+}
+
 .legend-color {
     width: 20px;
     height: 15px;
