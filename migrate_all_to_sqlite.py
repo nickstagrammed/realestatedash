@@ -190,7 +190,7 @@ def create_all_tables(conn):
     conn.execute('CREATE INDEX IF NOT EXISTS idx_state_coords_state ON state_coordinates(state)')
     
     conn.commit()
-    print("✅ Created all tables and indexes")
+    print("Created all tables and indexes")
 
 def calculate_beta(market_returns, national_returns):
     """Calculate beta using linear regression"""
@@ -241,13 +241,13 @@ def calculate_returns(values):
 
 def migrate_beta_calculations(conn):
     """Calculate and store beta values for metros and states"""
-    print("📊 Calculating beta values...")
+    print("Calculating beta values...")
     
     # Load national data for beta calculations
     national_df = pd.read_sql("SELECT * FROM national_timeseries ORDER BY month_date", conn)
     
     if len(national_df) == 0:
-        print("❌ No national data found for beta calculations")
+        print("No national data found for beta calculations")
         return
     
     # Calculate national returns for different periods
@@ -339,10 +339,10 @@ def migrate_beta_calculations(conn):
     if metro_betas:
         metro_beta_df = pd.DataFrame(metro_betas)
         metro_beta_df.to_sql('metro_betas', conn, if_exists='replace', index=False)
-        print(f"✅ Calculated betas for {len(metro_betas)} metro areas")
+        print(f"Calculated betas for {len(metro_betas)} metro areas")
     
     # Similar process for states (simplified for brevity)
-    print("✅ Beta calculations completed")
+    print("Beta calculations completed")
 
 def add_state_coordinates(conn):
     """Add approximate state center coordinates"""
@@ -414,11 +414,11 @@ def add_state_coordinates(conn):
     if state_data:
         state_df = pd.DataFrame(state_data)
         state_df.to_sql('state_coordinates', conn, if_exists='replace', index=False)
-        print(f"✅ Added coordinates for {len(state_data)} states")
+        print(f"Added coordinates for {len(state_data)} states")
 
 def main():
     """Main migration function"""
-    print(f"🚀 Starting comprehensive SQLite migration to {DB_PATH}")
+    print(f"Starting comprehensive SQLite migration to {DB_PATH}")
     
     # Connect to database
     conn = sqlite3.connect(DB_PATH)
@@ -429,9 +429,9 @@ def main():
         
         # Migrate existing time series data (if not already done)
         if not os.path.exists('data/national_data.csv'):
-            print("⚠️  CSV files not found - skipping time series migration")
+            print("CSV files not found - skipping time series migration")
         else:
-            print("📈 Time series data already migrated - skipping")
+            print("Time series data already migrated - skipping")
             
         # Calculate and store beta values
         migrate_beta_calculations(conn)
@@ -439,14 +439,14 @@ def main():
         # Add state coordinates
         add_state_coordinates(conn)
         
-        print("\n🎉 Comprehensive SQLite migration completed!")
+        print("\nComprehensive SQLite migration completed!")
         print("\nNew database structure:")
-        print("  📊 Time Series: national_timeseries, state_timeseries, metro_timeseries")
-        print("  🧮 Beta Calculations: metro_betas, state_betas")
-        print("  📍 Coordinates: metro_coordinates, state_coordinates")
+        print("  Time Series: national_timeseries, state_timeseries, metro_timeseries")
+        print("  Beta Calculations: metro_betas, state_betas")
+        print("  Coordinates: metro_coordinates, state_coordinates")
         
     except Exception as e:
-        print(f"❌ Migration failed: {e}")
+        print(f"Migration failed: {e}")
         conn.rollback()
     finally:
         conn.close()

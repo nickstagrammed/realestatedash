@@ -193,3 +193,6 @@ State Detail View
 - Intuitive navigation between geographic levels
 - Successful monthly automated data updates
 - Clear, actionable market insights from beta analysis
+
+## Manual Update
+- Remember that I updated the triangle and square modifiers to the metro view to 0 so I could test functionality. This happened at lines 582 - 583 in app_working.js
