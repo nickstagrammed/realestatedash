@@ -1187,7 +1187,7 @@ class RealEstateDashboard {
     
     
     // Show the trend lightbox for a specific metric
-    showTrendLightbox(locationName, metric) {
+    async showTrendLightbox(locationName, metric) {
         // Check if data processor is available
         if (!this.dataProcessor) {
             console.error('Data processor not available yet');
@@ -1220,16 +1220,105 @@ class RealEstateDashboard {
         };
         
         const locationLabel = isMetro ? `${locationName} Metro` : locationName;
-        title.textContent = `${metricLabels[metric]} - 5 Year Trend`;
-        subtitle.textContent = `${locationLabel} • ${this.formatDate(data.last_updated)}`;
         
-        // Get real historical data from CSV
-        const trendData = isMetro 
-            ? this.dataProcessor.getMetroHistoricalData(locationName, metric, 60)
-            : this.dataProcessor.getStateHistoricalData(locationName, metric, 60);
+        // Define which metrics support indexed performance
+        const indexedMetrics = ['active_listing_count', 'median_listing_price', 'new_listing_count', 'pending_listing_count'];
+        const supportsIndexed = indexedMetrics.includes(metric) && (isMetro || stateData);
+        
+        // Update title and subtitle based on whether indexed performance is available
+        if (supportsIndexed) {
+            title.textContent = `${metricLabels[metric]} vs National Index - 5 Year Trend`;
+            subtitle.textContent = `${locationLabel} • Performance vs National Trends`;
+        } else {
+            title.textContent = `${metricLabels[metric]} - 5 Year Trend`;
+            subtitle.textContent = `${locationLabel} • ${this.formatDate(data.last_updated)}`;
+        }
         
         // Show overlay
         overlay.classList.add('active');
+        
+        // For median days on market in metro areas, show comparison with national
+        if (metric === 'median_days_on_market' && isMetro && data.cbsa_code) {
+            try {
+                const response = await fetch(`${this.API_BASE_URL}/median-days/metro/${data.cbsa_code}`);
+                if (response.ok) {
+                    const medianDaysData = await response.json();
+                    setTimeout(() => {
+                        this.renderMedianDaysComparisonChart(medianDaysData, locationName);
+                        this.populateMedianDaysStats(medianDaysData, statsContainer);
+                    }, 100);
+                    return;
+                }
+            } catch (error) {
+                console.warn('Failed to load median days comparison data, falling back to regular chart:', error);
+            }
+        }
+        
+        // For median days on market in state areas, show comparison with national
+        if (metric === 'median_days_on_market' && stateData && data.state_id) {
+            try {
+                const response = await fetch(`${this.API_BASE_URL}/median-days/state/${data.state_id}`);
+                if (response.ok) {
+                    const medianDaysData = await response.json();
+                    setTimeout(() => {
+                        this.renderMedianDaysComparisonChart(medianDaysData, locationName);
+                        this.populateStateMedianDaysStats(medianDaysData, statsContainer);
+                    }, 100);
+                    return;
+                }
+            } catch (error) {
+                console.warn('Failed to load state median days comparison data, falling back to regular chart:', error);
+            }
+        }
+
+        // For supported metrics in metro and state areas, try to get indexed performance data
+        if (supportsIndexed && (data.cbsa_code || data.state_id)) {
+            // Map metrics to their API endpoints
+            let endpointMap, apiPath;
+            
+            if (isMetro && data.cbsa_code) {
+                // Metro endpoints
+                endpointMap = {
+                    'active_listing_count': 'metro',
+                    'median_listing_price': 'median-price',
+                    'new_listing_count': 'new-listings', 
+                    'pending_listing_count': 'pending-sale'
+                };
+                const endpoint = endpointMap[metric];
+                apiPath = `${this.API_BASE_URL}/indexed-performance/${endpoint}/${data.cbsa_code}`;
+            } else if (stateData && data.state_id) {
+                // State endpoints
+                endpointMap = {
+                    'active_listing_count': 'active',
+                    'median_listing_price': 'median-price',
+                    'new_listing_count': 'new-listings', 
+                    'pending_listing_count': 'pending-sale'
+                };
+                const endpoint = endpointMap[metric];
+                apiPath = `${this.API_BASE_URL}/indexed-performance/state/${endpoint}/${data.state_id}`;
+            }
+            
+            if (apiPath) {
+                try {
+                    const response = await fetch(apiPath);
+                    if (response.ok) {
+                        const indexedData = await response.json();
+                        setTimeout(() => {
+                            this.renderIndexedPerformanceChart(indexedData, locationName);
+                            this.populateIndexedPerformanceStats(indexedData, statsContainer);
+                        }, 100);
+                        return;
+                    }
+                } catch (error) {
+                    console.warn('Failed to load indexed performance data, falling back to regular chart:', error);
+                }
+            }
+        }
+        
+        // Fallback to regular historical data
+        const trendData = isMetro 
+            ? this.dataProcessor.getMetroHistoricalData(locationName, metric, 60)
+            : this.dataProcessor.getStateHistoricalData(locationName, metric, 60);
         
         // Render chart
         setTimeout(() => {
@@ -1367,6 +1456,271 @@ class RealEstateDashboard {
             <div class="lightbox-stat">
                 <div class="lightbox-stat-label">5-Year Average</div>
                 <div class="lightbox-stat-value">${formatValue(avgValue)}</div>
+            </div>
+        `;
+    }
+    
+    // Render indexed performance chart with actual vs national trend data
+    renderIndexedPerformanceChart(indexedData, locationName) {
+        const canvas = document.getElementById('lightboxChart');
+        if (!canvas) {
+            console.error('Lightbox chart canvas not found');
+            return;
+        }
+        
+        // Destroy existing chart if it exists
+        if (window.trendChart) {
+            window.trendChart.destroy();
+            window.trendChart = null;
+        }
+        
+        window.trendChart = new Chart(canvas, {
+            type: 'line',
+            data: indexedData.data,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: false // Title is handled by HTML
+                    },
+                    legend: {
+                        labels: {
+                            color: '#ffffff',
+                            usePointStyle: true,
+                            padding: 20,
+                            font: {
+                                size: 12
+                            }
+                        },
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#ffffff',
+                        borderColor: '#ffffff',
+                        borderWidth: 1,
+                        displayColors: true,
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                const label = context.dataset.label;
+                                return `${label}: ${Math.round(value).toLocaleString()}`;
+                            },
+                            afterBody: function(tooltipItems) {
+                                if (tooltipItems.length === 2) {
+                                    const actual = tooltipItems[0].parsed.y;
+                                    const indexed = tooltipItems[1].parsed.y;
+                                    const performance = ((actual / indexed) - 1) * 100;
+                                    return [`Performance vs Index: ${performance > 0 ? '+' : ''}${performance.toFixed(1)}%`];
+                                }
+                                return [];
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#ffffff',
+                            callback: function(value) {
+                                return Math.round(value).toLocaleString();
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Active Listings Count',
+                            color: '#ffffff'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#ffffff',
+                            maxTicksLimit: 12
+                        }
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
+        });
+    }
+    
+    // Populate indexed performance statistics
+    populateIndexedPerformanceStats(indexedData, container) {
+        const stats = indexedData.performance_stats;
+        const latestPerformance = stats.latest_performance_vs_index * 100;
+        const performanceColor = latestPerformance > 0 ? '#00ff7f' : '#ff6b6b';
+        const performanceLabel = latestPerformance > 0 ? 'Outperforming' : 'Underperforming';
+        
+        // Calculate some additional metrics
+        const totalGrowthActual = ((stats.latest_actual / stats.baseline_value) - 1) * 100;
+        const totalGrowthIndexed = ((stats.latest_indexed / stats.baseline_value) - 1) * 100;
+        
+        container.innerHTML = `
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Performance vs National</div>
+                <div class="lightbox-stat-value" style="color: ${performanceColor}">
+                    ${latestPerformance > 0 ? '+' : ''}${latestPerformance.toFixed(1)}%
+                </div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Actual Growth (5Y)</div>
+                <div class="lightbox-stat-value" style="color: ${totalGrowthActual > 0 ? '#00ff7f' : '#ff6b6b'}">
+                    ${totalGrowthActual > 0 ? '+' : ''}${totalGrowthActual.toFixed(1)}%
+                </div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">National Growth (5Y)</div>
+                <div class="lightbox-stat-value" style="color: ${totalGrowthIndexed > 0 ? '#00ff7f' : '#ff6b6b'}">
+                    ${totalGrowthIndexed > 0 ? '+' : ''}${totalGrowthIndexed.toFixed(1)}%
+                </div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Current Count</div>
+                <div class="lightbox-stat-value">${Math.round(stats.latest_actual).toLocaleString()}</div>
+            </div>
+        `;
+    }
+    
+    // Render median days comparison chart with metro vs national data
+    renderMedianDaysComparisonChart(medianDaysData, locationName) {
+        const canvas = document.getElementById('lightboxChart');
+        if (!canvas) {
+            console.error('Lightbox chart canvas not found');
+            return;
+        }
+        
+        // Destroy existing chart if it exists
+        if (window.trendChart) {
+            window.trendChart.destroy();
+            window.trendChart = null;
+        }
+        
+        window.trendChart = new Chart(canvas, {
+            type: 'line',
+            data: medianDaysData.data,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: false // Title is handled by HTML
+                    },
+                    legend: {
+                        labels: {
+                            color: '#ffffff',
+                            usePointStyle: true,
+                            padding: 20,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#ffffff',
+                            callback: function(value) {
+                                return value.toFixed(0) + ' days';
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: 'Median Days on Market',
+                            color: '#ffffff'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#ffffff',
+                            maxTicksLimit: 12
+                        }
+                    }
+                },
+                interaction: {
+                    intersect: false,
+                    mode: 'index'
+                }
+            }
+        });
+    }
+    
+    // Populate median days comparison statistics
+    populateMedianDaysStats(medianDaysData, container) {
+        const stats = medianDaysData.stats;
+        const difference = stats.difference;
+        
+        // Use the same conditional color as the chart (from API)
+        const metroColor = medianDaysData.data.datasets[0].borderColor;
+        const differenceColor = difference > 0 ? '#ff6b6b' : '#00ff7f'; // Red if slower, green if faster
+        
+        container.innerHTML = `
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Metro Median Days</div>
+                <div class="lightbox-stat-value" style="color: ${metroColor}">
+                    ${Math.round(stats.latest_metro)} days
+                </div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">National Median Days</div>
+                <div class="lightbox-stat-value" style="color: #64748B">
+                    ${Math.round(stats.latest_national)} days
+                </div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Difference</div>
+                <div class="lightbox-stat-value" style="color: ${differenceColor}">
+                    ${difference > 0 ? '+' : ''}${Math.round(difference)} days
+                </div>
+            </div>
+        `;
+    }
+    
+    // Populate state median days comparison statistics
+    populateStateMedianDaysStats(medianDaysData, container) {
+        const stats = medianDaysData.stats;
+        const difference = stats.difference;
+        
+        // Use the same conditional color as the chart (from API)
+        const stateColor = medianDaysData.data.datasets[0].borderColor;
+        const differenceColor = difference > 0 ? '#ff6b6b' : '#00ff7f'; // Red if slower, green if faster
+        
+        container.innerHTML = `
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">State Median Days</div>
+                <div class="lightbox-stat-value" style="color: ${stateColor}">
+                    ${Math.round(stats.latest_state)} days
+                </div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">National Median Days</div>
+                <div class="lightbox-stat-value" style="color: #64748B">
+                    ${Math.round(stats.latest_national)} days
+                </div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Difference</div>
+                <div class="lightbox-stat-value" style="color: ${differenceColor}">
+                    ${difference > 0 ? '+' : ''}${Math.round(difference)} days
+                </div>
             </div>
         `;
     }
