@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real Estate Beta Dashboard</title>
+    <title>Real Estate Dashboard</title>
     
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -14,28 +14,37 @@
 <body>
     <div id="app">
         <header class="dashboard-header">
-            <h1>Real Estate Beta Dashboard</h1>
-            <div class="header-controls">
-                <select id="viewSelector" class="view-selector">
-                    <option value="state">State View</option>
-                    <option value="metro">Metro View</option>
-                </select>
-                <div class="header-info">
-                    <span class="data-info" id="dataInfo">Hover over states for market summary • Click for detailed analysis</span>
-                </div>
-            </div>
+            <h1>Real Estate Trends Dashboard</h1>
         </header>
         
         <div class="main-content">
-            <div id="map" class="map-container"></div>
+            <div id="map" class="map-container">
+                <button id="backButton" class="back-button" style="display: none;" title="Return to Previous Level">
+                    ↺
+                </button>
+                <button id="closeButton" class="close-button" style="display: none;" title="Close Navigation">
+                    ✕
+                </button>
+            </div>
             
             <div id="detailPanel" class="detail-panel">
-                <h3>Market Analysis</h3>
-                <div id="detailContent">
+                <div class="sidebar-header">
+                    <select id="viewSelector" class="view-selector">
+                        <option value="state">State View</option>
+                        <option value="metro">Metro View</option>
+                        <option value="county">County View</option>
+                    </select>
+                    <div class="sidebar-instructions" id="sidebarInstructions">
+                        Hover over states for market analysis
+                    </div>
+                </div>
+                <div class="sidebar-content">
+                    <h3>County Market Analysis</h3>
+                    <div id="detailContent">
                     <div class="sidebar-intro">
                         <p>Click on a state to view comprehensive market analysis including:</p>
                         <ul>
-                            <li>Beta volatility metrics (1Y, 3Y, 5Y)</li>
+                            <li>Volatility analysis</li>
                             <li>Month-over-Month changes</li>
                             <li>Year-over-Year trends</li>
                             <li>Market positioning analysis</li>
@@ -58,31 +67,6 @@
             </div>
         </div>
         
-        <div class="legend">
-            <h4>Beta Scale</h4>
-            <div class="legend-scale">
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #00bfff;"></div>
-                    <span>< 0.5 (Low Beta)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #40e0d0;"></div>
-                    <span>0.5 - 0.8</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #ffd700;"></div>
-                    <span>0.8 - 1.2 (Market Beta)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #ff6347;"></div>
-                    <span>1.2 - 1.5</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #ff1493;"></div>
-                    <span>> 1.5 (High Beta)</span>
-                </div>
-            </div>
-        </div>
     </div>
     
     <!-- Lightbox Modal for Metric Trends -->
