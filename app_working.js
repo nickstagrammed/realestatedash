@@ -1190,6 +1190,91 @@ class RealEstateDashboard {
         
         // Store handler reference for cleanup
         this.currentEscHandler = escHandler;
+        
+        // Create state navigation layer for switching between states while in county view
+        if (this.stateBoundaries) {
+            // Remove any existing state navigation layer first
+            if (this.stateNavigationLayer) {
+                this.map.removeLayer(this.stateNavigationLayer);
+            }
+            
+            this.stateNavigationLayer = L.geoJSON(this.stateBoundaries, {
+                style: (feature) => {
+                    const isCurrentState = feature.properties.NAME === stateName;
+                    return {
+                        fillColor: 'transparent',
+                        weight: isCurrentState ? 0 : 2,
+                        opacity: isCurrentState ? 0 : 0.7,
+                        color: isCurrentState ? 'transparent' : '#666666',
+                        fillOpacity: 0,
+                        interactive: !isCurrentState
+                    };
+                },
+                onEachFeature: (feature, layer) => {
+                    const otherStateName = feature.properties.NAME;
+                    
+                    // Skip current state - it's not interactive
+                    if (otherStateName === stateName) {
+                        return;
+                    }
+                    
+                    // Add hover effects for other states
+                    layer.on('mouseover', () => {
+                        layer.setStyle({
+                            fillColor: '#ffffff',
+                            fillOpacity: 0.7,
+                            weight: 3,
+                            color: '#333333'
+                        });
+                    });
+                    
+                    layer.on('mouseout', () => {
+                        layer.setStyle({
+                            fillColor: 'transparent',
+                            fillOpacity: 0,
+                            weight: 2,
+                            color: '#666666'
+                        });
+                    });
+                    
+                    // Handle state click to switch to that state's counties
+                    layer.on('click', async (e) => {
+                        L.DomEvent.stopPropagation(e);
+                        e.originalEvent.preventDefault();
+                        
+                        // Special handling for DC
+                        if (otherStateName === 'District of Columbia') {
+                            console.log('DC has no counties - showing district-level data');
+                            this.showDCDetails();
+                            return;
+                        }
+                        
+                        console.log(`Switching to ${otherStateName} counties...`);
+                        this.currentDrilledState = otherStateName;
+                        await this.showStateCounties(otherStateName);
+                        
+                        // Update breadcrumb and header info
+                        this.updateBreadcrumb('county', null, otherStateName);
+                        const dataInfo = document.getElementById('dataInfo');
+                        if (dataInfo) {
+                            dataInfo.textContent = `Viewing ${otherStateName} counties • Click county for details • Click ↩ to return to national view`;
+                        }
+                    });
+                    
+                    // Add tooltip for other states
+                    layer.bindTooltip(`Switch to ${otherStateName}`, {
+                        permanent: false,
+                        direction: 'center',
+                        className: 'county-tooltip'
+                    });
+                }
+            }).addTo(this.map);
+            
+            // Make sure state navigation layer is below county layer
+            if (this.currentLayer) {
+                this.currentLayer.bringToFront();
+            }
+        }
     }
     
     async loadCountyDataForState(stateName) {
