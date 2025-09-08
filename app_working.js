@@ -9,7 +9,8 @@ class RealEstateDashboard {
         this.isDataLoaded = false;
         this.currentView = 'state'; // 'state', 'metro', or 'county'
         this.trendsChart = null;
-        this.API_BASE_URL = 'http://127.0.0.1:5001/api';
+        this.API_BASE_URL = 'http://127.0.0.1:5001/api'; // Legacy API URL - replaced with static data
+        this.useStaticData = true; // Flag to use static data instead of API calls
         this.stateBoundaries = null;
         this.countyBoundaries = null;
         this.currentDrilledState = null;
@@ -440,9 +441,17 @@ class RealEstateDashboard {
     }
     
     async loadMetroCoordinatesFromDB() {
-        console.log('🔄 Attempting to load metro coordinates from API...');
+        console.log('🔄 Loading metro coordinates from static data...');
         try {
-            // Try to load from SQLite database via API
+            if (this.useStaticData && window.completeStaticDataLoader) {
+                // Use complete static data loader
+                const coordinates = await window.completeStaticDataLoader.getMetroCoordinates();
+                console.log(`✅ Successfully loaded ${Object.keys(coordinates).length} metro coordinates from static data`);
+                console.log('📊 Sample static data:', Object.keys(coordinates).slice(0, 3));
+                return coordinates;
+            }
+            
+            // Fallback to API if static data is disabled
             const response = await fetch('http://localhost:5001/api/metros');
             console.log(`📡 API Response status: ${response.status} ${response.statusText}`);
             
@@ -1083,9 +1092,15 @@ class RealEstateDashboard {
     
     async loadCountyDataForState(stateName) {
         try {
-            const response = await fetch(`${this.API_BASE_URL}/counties/${stateName.toLowerCase()}`);
-            if (response.ok) {
-                return await response.json();
+            if (this.useStaticData && window.completeStaticDataLoader) {
+                // Use static data loader
+                return await window.completeStaticDataLoader.getCountiesByState(stateName);
+            } else {
+                // Fallback to API
+                const response = await fetch(`${this.API_BASE_URL}/counties/${stateName.toLowerCase()}`);
+                if (response.ok) {
+                    return await response.json();
+                }
             }
         } catch (error) {
             console.error(`Failed to load county data for ${stateName}:`, error);
@@ -1095,15 +1110,20 @@ class RealEstateDashboard {
     
     async showCountyDetail(countyFIPS, countyName, stateName) {
         try {
-            // Load individual county data on demand
-            const response = await fetch(`${this.API_BASE_URL}/county/${countyFIPS}`);
-            if (response.ok) {
-                const countyData = await response.json();
-                this.displayCountyDetails(countyData, countyName, stateName);
+            let countyData = null;
+            
+            if (this.useStaticData && window.completeStaticDataLoader) {
+                // Use static data loader
+                countyData = await window.completeStaticDataLoader.getCountyData(countyFIPS);
             } else {
-                // Show basic info if API call fails
-                this.displayCountyDetails(null, countyName, stateName);
+                // Fallback to API
+                const response = await fetch(`${this.API_BASE_URL}/county/${countyFIPS}`);
+                if (response.ok) {
+                    countyData = await response.json();
+                }
             }
+            
+            this.displayCountyDetails(countyData, countyName, stateName);
         } catch (error) {
             console.error(`Failed to load county details for ${countyName}:`, error);
             this.displayCountyDetails(null, countyName, stateName);
@@ -1244,21 +1264,42 @@ class RealEstateDashboard {
             
             // Try indexed performance first for supported metrics
             if (supportsIndexed) {
-                // Map metrics to their API endpoints
-                const endpointMap = {
-                    'active_listing_count': 'active',
-                    'median_listing_price': 'median-price',
-                    'new_listing_count': 'new-listings',
-                    'pending_listing_count': 'pending-sale'
-                };
-                
-                const endpoint = endpointMap[metric];
-                const apiPath = `${this.API_BASE_URL}/indexed-performance/county/${endpoint}/${countyId}`;
-                
                 try {
-                    const response = await fetch(apiPath);
-                    if (response.ok) {
-                        const indexedData = await response.json();
+                    let indexedData = null;
+                    
+                    if (this.useStaticData && window.completeStaticDataLoader) {
+                        // Use static data loader for county data
+                        const metricMap = {
+                            'active_listing_count': 'active',
+                            'median_listing_price': 'median_price',
+                            'new_listing_count': 'new_listings',
+                            'pending_listing_count': 'pending_sale'
+                        };
+                        const staticMetric = metricMap[metric];
+                        
+                        const rawData = await window.completeStaticDataLoader.getCountyIndexedPerformance(staticMetric, countyId);
+                        if (rawData && rawData.length > 0) {
+                            indexedData = window.completeStaticDataLoader.formatChartData(rawData, countyId, staticMetric);
+                        }
+                    } else {
+                        // Fallback to API calls
+                        const endpointMap = {
+                            'active_listing_count': 'active',
+                            'median_listing_price': 'median-price',
+                            'new_listing_count': 'new-listings',
+                            'pending_listing_count': 'pending-sale'
+                        };
+                        
+                        const endpoint = endpointMap[metric];
+                        const apiPath = `${this.API_BASE_URL}/indexed-performance/county/${endpoint}/${countyId}`;
+                        
+                        const response = await fetch(apiPath);
+                        if (response.ok) {
+                            indexedData = await response.json();
+                        }
+                    }
+                    
+                    if (indexedData) {
                         setTimeout(() => {
                             this.renderCountyIndexedPerformanceChart(indexedData, countyName);
                             this.populateCountyIndexedPerformanceStats(indexedData, statsContainer, metric, this.currentCountyData, countyId);
@@ -2295,13 +2336,23 @@ class RealEstateDashboard {
                 }
             }
             
-            console.log('DEBUG: About to make fetch request');
-            console.log(`Fetching from URL: ${this.API_BASE_URL}/trends/${level}/${encodeURIComponent(apiIdentifier)}`);
-            const response = await fetch(`${this.API_BASE_URL}/trends/${level}/${encodeURIComponent(apiIdentifier)}`);
-            console.log('DEBUG: Fetch completed');
-            console.log('Response status:', response.status);
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            trendData = await response.json();
+            console.log('DEBUG: About to load trends data');
+            let response;
+            let data;
+            
+            if (this.useStaticData && window.completeStaticDataLoader) {
+                // Use static data loader
+                console.log(`Getting trends from static data: ${level}/${apiIdentifier}`);
+                trendData = await window.completeStaticDataLoader.getTrends(level, apiIdentifier);
+            } else {
+                // Fallback to API
+                console.log(`Fetching from URL: ${this.API_BASE_URL}/trends/${level}/${encodeURIComponent(apiIdentifier)}`);
+                response = await fetch(`${this.API_BASE_URL}/trends/${level}/${encodeURIComponent(apiIdentifier)}`);
+                console.log('DEBUG: Fetch completed');
+                console.log('Response status:', response.status);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                trendData = await response.json();
+            }
             console.log('DEBUG: Response parsed as JSON');
             console.log('Trend data received:', trendData);
             
@@ -2527,9 +2578,20 @@ class RealEstateDashboard {
         // For median days on market in metro areas, show comparison with national
         if (metric === 'median_days_on_market' && isMetro && data.cbsa_code) {
             try {
-                const response = await fetch(`${this.API_BASE_URL}/median-days/metro/${data.cbsa_code}`);
-                if (response.ok) {
-                    const medianDaysData = await response.json();
+                let medianDaysData = null;
+                
+                if (this.useStaticData && window.completeStaticDataLoader) {
+                    // Use static data loader
+                    medianDaysData = await window.completeStaticDataLoader.getMetroMedianDays(data.cbsa_code);
+                } else {
+                    // Fallback to API
+                    const response = await fetch(`${this.API_BASE_URL}/median-days/metro/${data.cbsa_code}`);
+                    if (response.ok) {
+                        medianDaysData = await response.json();
+                    }
+                }
+                
+                if (medianDaysData) {
                     setTimeout(() => {
                         this.renderMedianDaysComparisonChart(medianDaysData, locationName);
                         this.populateMedianDaysStats(medianDaysData, statsContainer, data);
@@ -2544,9 +2606,20 @@ class RealEstateDashboard {
         // For median days on market in state areas, show comparison with national
         if (metric === 'median_days_on_market' && stateData && data.state_id) {
             try {
-                const response = await fetch(`${this.API_BASE_URL}/median-days/state/${data.state_id}`);
-                if (response.ok) {
-                    const medianDaysData = await response.json();
+                let medianDaysData = null;
+                
+                if (this.useStaticData && window.completeStaticDataLoader) {
+                    // Use static data loader
+                    medianDaysData = await window.completeStaticDataLoader.getStateMedianDays(data.state_id);
+                } else {
+                    // Fallback to API
+                    const response = await fetch(`${this.API_BASE_URL}/median-days/state/${data.state_id}`);
+                    if (response.ok) {
+                        medianDaysData = await response.json();
+                    }
+                }
+                
+                if (medianDaysData) {
                     setTimeout(() => {
                         this.renderMedianDaysComparisonChart(medianDaysData, locationName);
                         this.populateStateMedianDaysStats(medianDaysData, statsContainer, data);
@@ -2560,45 +2633,73 @@ class RealEstateDashboard {
 
         // For supported metrics in metro and state areas, try to get indexed performance data
         if (supportsIndexed && (data.cbsa_code || data.state_id)) {
-            // Map metrics to their API endpoints
-            let endpointMap, apiPath;
-            
-            if (isMetro && data.cbsa_code) {
-                // Metro endpoints
-                endpointMap = {
-                    'active_listing_count': 'metro',
-                    'median_listing_price': 'median-price',
-                    'new_listing_count': 'new-listings', 
-                    'pending_listing_count': 'pending-sale'
-                };
-                const endpoint = endpointMap[metric];
-                apiPath = `${this.API_BASE_URL}/indexed-performance/${endpoint}/${data.cbsa_code}`;
-            } else if (stateData && data.state_id) {
-                // State endpoints
-                endpointMap = {
-                    'active_listing_count': 'active',
-                    'median_listing_price': 'median-price',
-                    'new_listing_count': 'new-listings', 
-                    'pending_listing_count': 'pending-sale'
-                };
-                const endpoint = endpointMap[metric];
-                apiPath = `${this.API_BASE_URL}/indexed-performance/state/${endpoint}/${data.state_id}`;
-            }
-            
-            if (apiPath) {
-                try {
-                    const response = await fetch(apiPath);
-                    if (response.ok) {
-                        const indexedData = await response.json();
-                        setTimeout(() => {
-                            this.renderIndexedPerformanceChart(indexedData, locationName);
-                            this.populateIndexedPerformanceStats(indexedData, statsContainer, metric, data);
-                        }, 100);
-                        return;
+            try {
+                let indexedData = null;
+                
+                if (this.useStaticData && window.completeStaticDataLoader) {
+                    // Use static data loader
+                    const metricMap = {
+                        'active_listing_count': 'active',
+                        'median_listing_price': 'median_price',
+                        'new_listing_count': 'new_listings', 
+                        'pending_listing_count': 'pending_sale'
+                    };
+                    const staticMetric = metricMap[metric];
+                    
+                    if (isMetro && data.cbsa_code) {
+                        const rawData = await window.completeStaticDataLoader.getMetroIndexedPerformance(staticMetric, data.cbsa_code);
+                        if (rawData && rawData.length > 0) {
+                            indexedData = window.completeStaticDataLoader.formatChartData(rawData, data.cbsa_code, staticMetric);
+                        }
+                    } else if (stateData && data.state_id) {
+                        const rawData = await window.completeStaticDataLoader.getStateIndexedPerformance(staticMetric, data.state_id);
+                        if (rawData && rawData.length > 0) {
+                            indexedData = window.completeStaticDataLoader.formatChartData(rawData, data.state_id, staticMetric);
+                        }
                     }
-                } catch (error) {
-                    console.warn('Failed to load indexed performance data, falling back to regular chart:', error);
+                } else {
+                    // Fallback to API calls
+                    let endpointMap, apiPath;
+                    
+                    if (isMetro && data.cbsa_code) {
+                        // Metro endpoints
+                        endpointMap = {
+                            'active_listing_count': 'metro',
+                            'median_listing_price': 'median-price',
+                            'new_listing_count': 'new-listings', 
+                            'pending_listing_count': 'pending-sale'
+                        };
+                        const endpoint = endpointMap[metric];
+                        apiPath = `${this.API_BASE_URL}/indexed-performance/${endpoint}/${data.cbsa_code}`;
+                    } else if (stateData && data.state_id) {
+                        // State endpoints
+                        endpointMap = {
+                            'active_listing_count': 'active',
+                            'median_listing_price': 'median-price',
+                            'new_listing_count': 'new-listings', 
+                            'pending_listing_count': 'pending-sale'
+                        };
+                        const endpoint = endpointMap[metric];
+                        apiPath = `${this.API_BASE_URL}/indexed-performance/state/${endpoint}/${data.state_id}`;
+                    }
+                    
+                    if (apiPath) {
+                        const response = await fetch(apiPath);
+                        if (response.ok) {
+                            indexedData = await response.json();
+                        }
+                    }
                 }
+                
+                if (indexedData) {
+                    setTimeout(() => {
+                        this.renderIndexedPerformanceChart(indexedData, locationName);
+                        this.populateIndexedPerformanceStats(indexedData, statsContainer, metric, data);
+                    }, 100);
+                    return;
+                }
+            } catch (error) {
+                console.warn('Failed to load indexed performance data, falling back to regular chart:', error);
             }
         }
         
