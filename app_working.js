@@ -7,9 +7,16 @@ class RealEstateDashboard {
         this.stateData = {};
         this.metroData = {};
         this.isDataLoaded = false;
-        this.currentView = 'state'; // 'state' or 'metro'
+        this.currentView = 'state'; // 'state', 'metro', or 'county'
         this.trendsChart = null;
-        this.API_BASE_URL = 'http://localhost:5001/api';
+        this.API_BASE_URL = 'http://127.0.0.1:5001/api';
+        this.stateBoundaries = null;
+        this.countyBoundaries = null;
+        this.currentDrilledState = null;
+        this.currentDrillLevel = 'national'; // Track drill level: 'national', 'state', 'county'
+        this.selectedStateLayer = null;
+        this.closeButton = null;
+        this.backButton = null;
         this.init();
     }
     
@@ -45,7 +52,29 @@ class RealEstateDashboard {
         }
         
         this.setupViewSelector();
+        this.setupNavigationButtons();
+        
+        // Set initial sidebar title and content
+        this.updateSidebarTitle();
+        
+        
         this.createBasicStateLayer();
+    }
+    
+    setupNavigationButtons() {
+        this.closeButton = document.getElementById('closeButton');
+        if (this.closeButton) {
+            this.closeButton.addEventListener('click', () => {
+                this.returnToNationalView();
+            });
+        }
+        
+        this.backButton = document.getElementById('backButton');
+        if (this.backButton) {
+            this.backButton.addEventListener('click', () => {
+                this.returnToPreviousLevel();
+            });
+        }
     }
     
     initializeMap() {
@@ -60,12 +89,12 @@ class RealEstateDashboard {
         // Remove restrictive bounds to eliminate jumpiness
         // this.map.setMaxBounds(bounds);
         this.map.setMinZoom(3);
-        this.map.setMaxZoom(8);
+        this.map.setMaxZoom(12); // Increase max zoom for county detail
         
         // Add dark theme tile layer
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             attribution: '© OpenStreetMap contributors, © CARTO',
-            maxZoom: 8,
+            maxZoom: 12,
             subdomains: 'abcd'
         }).addTo(this.map);
         
@@ -78,124 +107,181 @@ class RealEstateDashboard {
         
         this.map.getContainer().style.background = '#000000';
         
-        // Disable map interactions that might interfere with circle clicks
-        this.map.on('click', (e) => {
-            // Prevent map click from interfering with circle clicks
-            e.originalEvent.stopPropagation();
-        });
+        // Remove the problematic global click handler - we'll handle clicks per layer
     }
     
     setupViewSelector() {
         const viewSelector = document.getElementById('viewSelector');
-        const dataInfo = document.getElementById('dataInfo');
+        const sidebarInstructions = document.getElementById('sidebarInstructions');
         
-        if (!viewSelector || !dataInfo) return;
+        if (!viewSelector || !sidebarInstructions) return;
         
         viewSelector.addEventListener('change', async (e) => {
             this.currentView = e.target.value;
+            
+            // Close any open lightboxes when switching views
+            const trendLightbox = document.getElementById('trendLightbox');
+            if (trendLightbox && trendLightbox.classList.contains('active')) {
+                trendLightbox.classList.remove('active');
+                if (window.trendChart) {
+                    window.trendChart.destroy();
+                    window.trendChart = null;
+                }
+            }
+            
+            // Clear sidebar to default state and update title before switching view
+            this.restoreDefaultSidebar();
+            this.updateSidebarTitle();
+            
             await this.switchView();
             
-            // Update header text and legend
+            // Update sidebar instructions and legend
             if (this.currentView === 'metro') {
-                dataInfo.textContent = 'Large circles: Major markets • Medium circles: Regional markets • Small circles: Local markets';
+                sidebarInstructions.textContent = 'Hover over metro areas for market analysis';
                 this.updateLegendForMetroView();
+            } else if (this.currentView === 'county') {
+                sidebarInstructions.textContent = 'Select a state to view county data';
             } else {
-                dataInfo.textContent = 'Hover over states for market summary • Click for detailed analysis';
-                this.updateLegendForStateView();
+                sidebarInstructions.textContent = 'Hover over states for market analysis';
             }
         });
     }
     
     async switchView() {
+        // Clean up previous view state
+        this.cleanupViewState();
+        
         // Clear existing layer
         if (this.currentLayer) {
             this.map.removeLayer(this.currentLayer);
             this.currentLayer = null;
         }
         
+        // Reset map view to national level
+        this.map.setView([39.50, -98.35], 4);
+        
         // Create appropriate layer based on current view
         if (this.currentView === 'metro') {
             await this.createMetroLayer();
+        } else if (this.currentView === 'county') {
+            await this.createCountyView();
         } else {
             this.createBasicStateLayer();
         }
     }
     
-    createBasicStateLayer() {
-        const stateCoordinates = {
-            'Nevada': [39.1612, -117.2713], 'Washington': [47.4009, -121.4905], 'Minnesota': [45.6945, -93.9002],
-            'Kansas': [38.5266, -96.7265], 'Maine': [44.6939, -69.3819], 'Colorado': [39.0598, -105.3111],
-            'Connecticut': [41.5978, -72.7554], 'Iowa': [42.0115, -93.2105], 'Idaho': [44.2405, -114.4788],
-            'California': [36.1162, -119.6816], 'Texas': [31.0545, -97.5635], 'Florida': [27.7663, -82.6404],
-            'New York': [42.1657, -74.9481], 'Pennsylvania': [40.5908, -77.2098], 'Illinois': [40.3363, -89.0022],
-            'Ohio': [40.3888, -82.7649], 'Georgia': [33.76, -84.39], 'North Carolina': [35.771, -78.638],
-            'Michigan': [43.3266, -84.5361], 'Arizona': [33.7298, -111.4312], 'Virginia': [37.7693, -78.17],
-            'Tennessee': [35.7478, -86.7923], 'Indiana': [39.8494, -86.2583], 'Massachusetts': [42.2373, -71.5314],
-            'Maryland': [39.0639, -76.8021], 'Missouri': [38.4561, -92.2884], 'Wisconsin': [44.2685, -89.6165],
-            'Oregon': [44.572, -122.0709], 'South Carolina': [33.8191, -80.9066], 'Alabama': [32.3182, -86.9023],
-            'Louisiana': [31.1695, -91.8678], 'Kentucky': [37.6681, -84.6701], 'Arkansas': [34.9513, -92.3809],
-            'Utah': [40.1135, -111.8535], 'Oklahoma': [35.5653, -96.9289], 'Mississippi': [32.7767, -89.6711],
-            'New Mexico': [34.8405, -106.2485], 'West Virginia': [38.4912, -80.9545], 'Nebraska': [41.1254, -98.2681],
-            'New Jersey': [40.3573, -74.4057], 'New Hampshire': [43.4525, -71.5639], 'Rhode Island': [41.6809, -71.5118],
-            'Montana': [47.0527, -110.2148], 'Delaware': [39.3185, -75.5071], 'South Dakota': [44.2998, -99.4388],
-            'North Dakota': [47.5289, -99.784], 'Alaska': [61.385, -152.2683], 'Vermont': [44.0459, -72.7107],
-            'Wyoming': [42.7475, -107.2085], 'Hawaii': [21.0943, -157.4983]
-        };
+    cleanupViewState() {
+        // Reset county view state
+        this.currentDrilledState = null;
         
-        const circles = [];
+        // Clear any selected layers
+        this.selectedCountyLayer = null;
+        this.selectedStateLayer = null;
         
-        Object.entries(stateCoordinates).forEach(([stateName, coords]) => {
-            const stateData = this.stateData[stateName];
-            if (!stateData) return;
-            
-            const beta5y = stateData.active_listing_count_beta_5y || 1;
-            const color = this.getBetaColor(beta5y);
-            const listingCount = stateData.active_listing_count || 1000;
-            
-            // Calculate zoom-adjusted radius
-            const radius = this.calculateCircleRadius(listingCount);
-            
-            const circle = L.circle(coords, {
+        // Hide breadcrumb and close button
+        this.updateBreadcrumb('national');
+        this.hideCloseButton();
+        this.hideBackButton();
+        
+        // Clean up event handlers
+        this.map.off('click');
+        if (this.currentEscHandler) {
+            document.removeEventListener('keydown', this.currentEscHandler);
+            this.currentEscHandler = null;
+        }
+        
+        // Remove focus from map container
+        if (this.map.getContainer()) {
+            this.map.getContainer().blur();
+        }
+    }
+    
+    async createBasicStateLayer() {
+        // Load state boundaries if not already loaded
+        if (!this.stateBoundaries) {
+            try {
+                const response = await fetch('./state_boundaries.json');
+                this.stateBoundaries = await response.json();
+            } catch (error) {
+                console.error('Failed to load state boundaries:', error);
+                return;
+            }
+        }
+        
+        // Create state boundary layer with white borders
+        this.currentLayer = L.geoJSON(this.stateBoundaries, {
+            style: {
+                fillColor: 'transparent',
+                weight: 2,
+                opacity: 1,
                 color: '#ffffff',
-                fillColor: color,
-                fillOpacity: 0.8,
-                radius: radius,
-                weight: 3,  // Thicker border for better visibility
-                interactive: true,
-                bubblingMouseEvents: false  // Prevent event conflicts
-            });
-            
-            // Store data for zoom updates
-            circle._stateData = {
-                stateName,
-                stateData,
-                listingCount,
-                color
-            };
-            
-            circle.on({
-                mouseover: (e) => {
-                    e.originalEvent.stopPropagation();
-                    circle.setStyle({ fillOpacity: 1.0, weight: 5 }); // More dramatic highlight
-                    this.showPopup(e.latlng, stateName, stateData);
-                },
-                mouseout: (e) => {
-                    e.originalEvent.stopPropagation();
-                    circle.setStyle({ fillOpacity: 0.8, weight: 3 }); // Reset to default
-                    this.map.closePopup();
-                },
-                click: (e) => {
-                    e.originalEvent.stopPropagation();
-                    console.log(`Circle clicked: ${stateName}`);
-                    this.showDetailPanel(stateName, stateData);
-                    this.loadTrendChart('state', stateName);
-                }
-            });
-            
-            circles.push(circle);
-        });
-        
-        this.currentLayer = L.layerGroup(circles).addTo(this.map);
+                fillOpacity: 0
+            },
+            onEachFeature: (feature, layer) => {
+                const stateName = feature.properties.NAME;
+                const stateData = this.stateData[stateName];
+                
+                // Add hover effects
+                layer.on('mouseover', () => {
+                    // Don't change style if this state is selected
+                    if (this.selectedStateLayer !== layer) {
+                        layer.setStyle({
+                            fillColor: '#ffffff',
+                            fillOpacity: 0.7,
+                            weight: 3,
+                            color: '#ffffff'
+                        });
+                    }
+                });
+                
+                layer.on('mouseout', () => {
+                    // Don't revert style if this state is selected
+                    if (this.selectedStateLayer !== layer) {
+                        layer.setStyle({
+                            fillColor: 'transparent',
+                            fillOpacity: 0,
+                            weight: 2,
+                            color: '#ffffff'
+                        });
+                    }
+                });
+                
+                // Handle state clicks
+                layer.on('click', () => {
+                    if (stateData) {
+                        // Clear previous selection
+                        if (this.selectedStateLayer) {
+                            this.selectedStateLayer.setStyle({
+                                fillColor: 'transparent',
+                                fillOpacity: 0,
+                                weight: 2,
+                                color: '#ffffff'
+                            });
+                        }
+                        
+                        // Set new selection with white fill
+                        this.selectedStateLayer = layer;
+                        layer.setStyle({
+                            fillColor: '#ffffff',
+                            fillOpacity: 0.7,
+                            weight: 3,
+                            color: '#ffffff'
+                        });
+                        
+                        console.log(`State clicked: ${stateName}`);
+                        this.showDetailPanel(stateName, stateData);
+                        // this.loadTrendChart('state', stateName); // Disabled 5-year trends
+                    }
+                });
+                
+                // Add tooltip with County View styling
+                layer.bindTooltip(stateName, {
+                    permanent: false,
+                    direction: 'center',
+                    className: 'county-tooltip'
+                });
+            }
+        }).addTo(this.map);
     }
     
     async createMetroLayer() {
@@ -304,7 +390,7 @@ class RealEstateDashboard {
                     this.showDetailPanel(csvMetroName, metroData);
                     // For metros, we need to get the CBSA code from the metro data
                     const cbsaCode = metroData.cbsa_code || csvMetroName;
-                    this.loadTrendChart('metro', cbsaCode);
+                    // this.loadTrendChart('metro', cbsaCode); // Disabled 5-year trends
                 }
             });
             
@@ -639,36 +725,6 @@ class RealEstateDashboard {
         `;
     }
 
-    updateLegendForStateView() {
-        const legend = document.querySelector('.legend');
-        if (!legend) return;
-
-        legend.innerHTML = `
-            <h4>Beta Scale</h4>
-            <div class="legend-scale">
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #00bfff;"></div>
-                    <span>&lt; 0.5 (Low Beta)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #40e0d0;"></div>
-                    <span>0.5 - 0.8</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #ffd700;"></div>
-                    <span>0.8 - 1.2 (Market Beta)</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #ff6347;"></div>
-                    <span>1.2 - 1.5</span>
-                </div>
-                <div class="legend-item">
-                    <div class="legend-color" style="background-color: #ff1493;"></div>
-                    <span>&gt; 1.5 (High Beta)</span>
-                </div>
-            </div>
-        `;
-    }
     
     calculateCircleRadius(listingCount, isUniform = false) {
         const zoom = this.map ? this.map.getZoom() : 4;
@@ -724,6 +780,1052 @@ class RealEstateDashboard {
         return '#ff1493';
     }
     
+    // County View Functions
+    async createCountyView() {
+        if (this.currentDrilledState) {
+            // Show counties for the drilled state
+            await this.showStateCounties(this.currentDrilledState);
+        } else {
+            // Show national state boundaries for selection
+            await this.showStateBoundariesForCountyView();
+        }
+    }
+    
+    async showStateBoundariesForCountyView() {
+        // Load state boundaries if not already loaded
+        if (!this.stateBoundaries) {
+            console.log('Loading state boundaries...');
+            try {
+                // Using local state boundaries GeoJSON
+                const response = await fetch('./state_boundaries.json');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                this.stateBoundaries = await response.json();
+                console.log('State boundaries loaded successfully', this.stateBoundaries.features.length, 'features');
+            } catch (error) {
+                console.error('Failed to load state boundaries:', error);
+                // Fallback: show error message to user
+                const dataInfo = document.getElementById('dataInfo');
+                if (dataInfo) {
+                    dataInfo.textContent = 'Failed to load state boundaries. Please check your internet connection.';
+                }
+                return;
+            }
+        }
+        
+        // Create state boundary layer
+        this.currentLayer = L.geoJSON(this.stateBoundaries, {
+            style: {
+                fillColor: 'transparent',
+                weight: 2,
+                opacity: 1,
+                color: '#666666',
+                fillOpacity: 0
+            },
+            onEachFeature: (feature, layer) => {
+                const stateName = feature.properties.NAME;
+                
+                // Add hover effects
+                layer.on('mouseover', () => {
+                    layer.setStyle({
+                        fillColor: '#ffffff',
+                        fillOpacity: 0.7,
+                        weight: 3,
+                        color: '#333333'
+                    });
+                });
+                
+                layer.on('mouseout', () => {
+                    layer.setStyle({
+                        fillColor: 'transparent',
+                        fillOpacity: 0,
+                        weight: 2,
+                        color: '#666666'
+                    });
+                });
+                
+                // Handle state click to drill down to counties
+                layer.on('click', async (e) => {
+                    // Stop event propagation to prevent conflicts
+                    L.DomEvent.stopPropagation(e);
+                    e.originalEvent.preventDefault();
+                    
+                    // Special handling for DC - no counties
+                    if (stateName === 'District of Columbia') {
+                        console.log('DC has no counties - showing district-level data');
+                        this.showDCDetails();
+                        return;
+                    }
+                    
+                    console.log(`Drilling down to ${stateName} counties...`);
+                    this.currentDrilledState = stateName;
+                    this.currentDrillLevel = 'state';
+                    await this.showStateCounties(stateName);
+                    
+                    // Update breadcrumb and header info
+                    this.updateBreadcrumb('county', null, stateName);
+                    this.showBackButton();
+                    this.hideCloseButton();
+                    const dataInfo = document.getElementById('dataInfo');
+                    if (dataInfo) {
+                        dataInfo.textContent = `Viewing ${stateName} counties • Click county for details • Click ↩ to return to national view`;
+                    }
+                });
+                
+                // Add tooltip
+                layer.bindTooltip(stateName, {
+                    permanent: false,
+                    direction: 'center',
+                    className: 'county-tooltip'
+                });
+            }
+        }).addTo(this.map);
+    }
+    
+    async showStateCounties(stateName) {
+        console.log(`Loading counties for ${stateName}...`);
+        
+        // Show loading indicator
+        const dataInfo = document.getElementById('dataInfo');
+        if (dataInfo) {
+            dataInfo.textContent = `Loading ${stateName} counties...`;
+        }
+        
+        // Load county boundaries for this specific state from pre-split file
+        let stateCounties;
+        try {
+            console.log(`Loading county boundaries for ${stateName}...`);
+            const stateFileName = `counties/${stateName.toLowerCase().replace(/ /g, '')}_counties.json`;
+            const response = await fetch(`./${stateFileName}`);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            const countiesData = await response.json();
+            stateCounties = countiesData.features;
+            console.log(`Loaded ${stateCounties.length} counties for ${stateName} (${(JSON.stringify(countiesData).length/1024).toFixed(1)}KB)`);
+        } catch (error) {
+            console.error(`Failed to load county boundaries for ${stateName}:`, error);
+            if (dataInfo) {
+                dataInfo.textContent = `Failed to load ${stateName} county boundaries. Please try again.`;
+            }
+            return;
+        }
+        
+        
+        // Clear current layer
+        if (this.currentLayer) {
+            this.map.removeLayer(this.currentLayer);
+        }
+        
+        // Update progress
+        if (dataInfo) {
+            dataInfo.textContent = `${stateName} counties loaded • Click a county for market data`;
+        }
+        
+        // Create county layer with default styling (no market data loading initially)
+        this.currentLayer = L.geoJSON({
+            type: 'FeatureCollection',
+            features: stateCounties
+        }, {
+            style: (feature) => {
+                // Default neutral styling - we'll load market data on demand
+                return {
+                    fillColor: '#f0f0f0',
+                    weight: 1,
+                    opacity: 1,
+                    color: '#999',
+                    fillOpacity: 0.4
+                };
+            },
+            onEachFeature: (feature, layer) => {
+                const countyName = feature.properties.NAME;
+                const stateAbbrev = this.getStateAbbreviation(stateName);
+                
+                // Basic tooltip without market data
+                layer.bindTooltip(`${countyName}, ${stateAbbrev}`, {
+                    permanent: false,
+                    direction: 'center',
+                    className: 'county-tooltip'
+                });
+                
+                // Add hover effects for counties
+                layer.on('mouseover', () => {
+                    // Don't change style if this county is selected
+                    if (this.selectedCountyLayer !== layer) {
+                        layer.setStyle({
+                            fillColor: '#ffffff',
+                            fillOpacity: 0.8,
+                            weight: 2,
+                            color: '#333'
+                        });
+                    }
+                });
+                
+                layer.on('mouseout', () => {
+                    // Don't revert style if this county is selected
+                    if (this.selectedCountyLayer !== layer) {
+                        layer.setStyle({
+                            fillColor: '#f0f0f0',
+                            fillOpacity: 0.4,
+                            weight: 1,
+                            color: '#999'
+                        });
+                    }
+                });
+                
+                // Click handler for detailed data
+                layer.on('click', async (e) => {
+                    L.DomEvent.stopPropagation(e);
+                    
+                    // Clear previous selection
+                    if (this.selectedCountyLayer) {
+                        this.selectedCountyLayer.setStyle({
+                            fillColor: '#f0f0f0',
+                            fillOpacity: 0.4,
+                            weight: 1,
+                            color: '#999'
+                        });
+                    }
+                    
+                    // Set new selection with white fill and gold border
+                    this.selectedCountyLayer = layer;
+                    this.currentDrillLevel = 'county';
+                    layer.setStyle({
+                        fillColor: '#ffffff',
+                        fillOpacity: 0.8,
+                        weight: 3,
+                        color: '#FFD700'
+                    });
+                    
+                    const countyFIPS = feature.properties.STATE + feature.properties.COUNTY;
+                    
+                    // Snap to county bounds for better focus
+                    this.map.fitBounds(layer.getBounds(), {
+                        padding: [50, 50],
+                        maxZoom: 10
+                    });
+                    
+                    await this.showCountyDetail(countyFIPS, countyName, stateAbbrev);
+                });
+            }
+        }).addTo(this.map);
+        
+        // Fit map to state bounds with padding
+        // Special handling for Alaska's geographic extent
+        if (stateName.toLowerCase() === 'alaska') {
+            this.map.setView([64.0685, -152.2782], 4); // Alaska center
+        } else {
+            this.map.fitBounds(this.currentLayer.getBounds(), {
+                padding: [20, 20],
+                maxZoom: 8
+            });
+        }
+        
+        // Remove any existing keyboard handlers first
+        this.map.off('keydown');
+        
+        // Add ESC key handler for returning to national view
+        this.map.getContainer().focus(); // Make map focusable
+        this.map.getContainer().tabIndex = 0;
+        
+        const escHandler = (e) => {
+            if (e.key === 'Escape' || e.keyCode === 27) {
+                this.returnToNationalCountyView();
+                document.removeEventListener('keydown', escHandler);
+            }
+        };
+        
+        document.addEventListener('keydown', escHandler);
+        
+        // Store handler reference for cleanup
+        this.currentEscHandler = escHandler;
+    }
+    
+    async loadCountyDataForState(stateName) {
+        try {
+            const response = await fetch(`${this.API_BASE_URL}/counties/${stateName.toLowerCase()}`);
+            if (response.ok) {
+                return await response.json();
+            }
+        } catch (error) {
+            console.error(`Failed to load county data for ${stateName}:`, error);
+        }
+        return {};
+    }
+    
+    async showCountyDetail(countyFIPS, countyName, stateName) {
+        try {
+            // Load individual county data on demand
+            const response = await fetch(`${this.API_BASE_URL}/county/${countyFIPS}`);
+            if (response.ok) {
+                const countyData = await response.json();
+                this.displayCountyDetails(countyData, countyName, stateName);
+            } else {
+                // Show basic info if API call fails
+                this.displayCountyDetails(null, countyName, stateName);
+            }
+        } catch (error) {
+            console.error(`Failed to load county details for ${countyName}:`, error);
+            this.displayCountyDetails(null, countyName, stateName);
+        }
+    }
+    
+    displayCountyDetails(countyData, countyName, stateName) {
+        const detailContent = document.getElementById('detailContent');
+        
+        if (!detailContent) return;
+        
+        // Store current county data for access in lightboxes
+        this.currentCountyData = countyData;
+        
+        if (!countyData) {
+            detailContent.innerHTML = `
+                <div style="text-align: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #444;">
+                    <h2 style="color: #ffffff; margin: 0; font-size: 1.4rem;">${countyName}, ${stateName}</h2>
+                    <span style="color: #aaa; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">COUNTY DATA NOT AVAILABLE</span>
+                </div>
+                <p style="text-align: center; color: #aaa;">County market data is not available for this location.</p>
+            `;
+            return;
+        }
+        
+        // Helper function to get change class
+        const getChangeClass = (value) => {
+            if (value > 0) return 'change-positive';
+            if (value < 0) return 'change-negative';
+            return '';
+        };
+        
+        // Use the FIPS code as county identifier for API calls
+        const countyId = countyData.county_fips;
+        
+        const content = `
+            <div style="text-align: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #444;">
+                <h2 style="color: #ffffff; margin: 0; font-size: 1.4rem;">${countyName}, ${stateName}</h2>
+                <span style="color: #aaa; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">COUNTY • ${this.formatDate(countyData.month_date)}</span>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto auto; gap: 1rem; margin-bottom: 1rem;">
+                <!-- Active Listings (spans 2 columns) -->
+                <div class="metric-card" style="grid-column: 1 / 3; display: flex; flex-direction: column; cursor: pointer;" onclick="window.dashboard.showCountyTrendLightbox('${countyId}', 'active_listing_count')">
+                    <h5>Active Listings</h5>
+                    <div class="metric-value">${this.formatValue(countyData.active_listing_count)}</div>
+                    <div style="flex-grow: 1; display: flex; align-items: center;">
+                        <div class="metric-change" style="width: 85%;">
+                            <span class="${getChangeClass(countyData.active_listing_count_mm)}">MoM: ${this.formatPercent(countyData.active_listing_count_mm)}%</span>
+                            <span class="${getChangeClass(countyData.active_listing_count_yy)}">YoY: ${this.formatPercent(countyData.active_listing_count_yy)}%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Median Price -->
+                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showCountyTrendLightbox('${countyId}', 'median_listing_price')">
+                    <h5>Median Price</h5>
+                    <div class="metric-value" style="color: #ffd700;">$${this.formatPrice(countyData.median_listing_price)}</div>
+                    <div class="metric-change">
+                        <span class="${getChangeClass(countyData.median_listing_price_mm)}">MoM: ${this.formatPercent(countyData.median_listing_price_mm)}%</span>
+                        <span class="${getChangeClass(countyData.median_listing_price_yy)}">YoY: ${this.formatPercent(countyData.median_listing_price_yy)}%</span>
+                    </div>
+                </div>
+                
+                <!-- New Listings -->
+                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showCountyTrendLightbox('${countyId}', 'new_listing_count')">
+                    <h5>New Listings</h5>
+                    <div class="metric-value">${this.formatValue(countyData.new_listing_count)}</div>
+                    <div class="metric-change">
+                        <span class="${getChangeClass(countyData.new_listing_count_mm)}">MoM: ${this.formatPercent(countyData.new_listing_count_mm)}%</span>
+                        <span class="${getChangeClass(countyData.new_listing_count_yy)}">YoY: ${this.formatPercent(countyData.new_listing_count_yy)}%</span>
+                    </div>
+                </div>
+                
+                <!-- Pending Listings -->
+                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showCountyTrendLightbox('${countyId}', 'pending_listing_count')">
+                    <h5>Pending Sale</h5>
+                    <div class="metric-value">${this.formatValue(countyData.pending_listing_count)}</div>
+                    <div class="metric-change">
+                        <span class="${getChangeClass(countyData.pending_listing_count_mm)}">MoM: ${this.formatPercent(countyData.pending_listing_count_mm)}%</span>
+                        <span class="${getChangeClass(countyData.pending_listing_count_yy)}">YoY: ${this.formatPercent(countyData.pending_listing_count_yy)}%</span>
+                    </div>
+                </div>
+                
+                <!-- Median Days on Market -->
+                <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showCountyTrendLightbox('${countyId}', 'median_days_on_market')">
+                    <h5>Median Days</h5>
+                    <div class="metric-value">${this.formatValue(countyData.median_days_on_market)}</div>
+                    <div class="metric-change">
+                        <span class="${getChangeClass(countyData.median_days_on_market_mm)}">MoM: ${this.formatPercent(countyData.median_days_on_market_mm)}%</span>
+                        <span class="${getChangeClass(countyData.median_days_on_market_yy)}">YoY: ${this.formatPercent(countyData.median_days_on_market_yy)}%</span>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        detailContent.innerHTML = content;
+    }
+    
+    async showCountyTrendLightbox(countyId, metric) {
+        try {
+            const overlay = document.getElementById('trendLightbox');
+            const title = document.getElementById('lightboxTitle');
+            const subtitle = document.getElementById('lightboxSubtitle');
+            const statsContainer = document.getElementById('lightboxStats');
+            
+            // Set title and subtitle
+            const metricLabels = {
+                'active_listing_count': 'Active Listings',
+                'new_listing_count': 'New Listings', 
+                'pending_listing_count': 'Pending Sale',
+                'median_listing_price': 'Median Listing Price',
+                'median_days_on_market': 'Median Days on Market'
+            };
+            
+            // Try to get county name from current county data, fallback to FIPS code
+            let countyName = countyId;
+            if (this.currentCountyData && this.currentCountyData.county_name) {
+                countyName = this.currentCountyData.county_name.split(',')[0]; // Get county name without state
+                countyName = countyName.charAt(0).toUpperCase() + countyName.slice(1); // Capitalize first letter
+            }
+            
+            // Define which metrics support indexed performance
+            const indexedMetrics = ['active_listing_count', 'median_listing_price', 'new_listing_count', 'pending_listing_count'];
+            const supportsIndexed = indexedMetrics.includes(metric);
+            
+            // Update title and subtitle based on whether indexed performance is available
+            if (supportsIndexed) {
+                title.textContent = `${metricLabels[metric]} vs National Index - 5 Year Trend`;
+                subtitle.textContent = `${countyName} County • Performance vs National Trends`;
+            } else {
+                title.textContent = `${metricLabels[metric]} - 5 Year Trend`;
+                subtitle.textContent = `${countyName} County • Historical Performance`;
+            }
+            
+            // Show overlay
+            overlay.classList.add('active');
+            
+            // Try indexed performance first for supported metrics
+            if (supportsIndexed) {
+                // Map metrics to their API endpoints
+                const endpointMap = {
+                    'active_listing_count': 'active',
+                    'median_listing_price': 'median-price',
+                    'new_listing_count': 'new-listings',
+                    'pending_listing_count': 'pending-sale'
+                };
+                
+                const endpoint = endpointMap[metric];
+                const apiPath = `${this.API_BASE_URL}/indexed-performance/county/${endpoint}/${countyId}`;
+                
+                try {
+                    const response = await fetch(apiPath);
+                    if (response.ok) {
+                        const indexedData = await response.json();
+                        setTimeout(() => {
+                            this.renderCountyIndexedPerformanceChart(indexedData, countyName);
+                            this.populateCountyIndexedPerformanceStats(indexedData, statsContainer, metric, this.currentCountyData, countyId);
+                        }, 100);
+                        return;
+                    }
+                } catch (error) {
+                    console.warn('Failed to load county indexed performance data, falling back to regular chart:', error);
+                }
+            }
+            
+            // Fallback to regular trend data for unsupported metrics or if indexed performance fails  
+            // For median days on market, show regular trend view similar to states
+            if (metric === 'median_days_on_market') {
+                setTimeout(() => {
+                    this.showCountyMedianDaysTrend(countyId, countyName, statsContainer);
+                }, 100);
+                return;
+            }
+            
+            // If we get here, show an error for indexed metrics that failed
+            setTimeout(() => {
+                statsContainer.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 2rem;">
+                        <h3 style="color: #fff; margin-bottom: 1rem;">County Data Unavailable</h3>
+                        <p style="color: #aaa; margin-bottom: 1.5rem;">
+                            ${metricLabels[metric]} indexed performance data is not available for ${countyName} County.
+                        </p>
+                        <p style="color: #ccc; font-size: 0.9rem;">
+                            County FIPS: ${countyId} • This county may not have sufficient data for analysis.
+                        </p>
+                    </div>
+                `;
+            }, 100);
+            
+        } catch (error) {
+            console.error(`Failed to load county trend data for ${countyName} (${countyId}):`, error);
+            
+            // Show error message
+            const statsContainer = document.getElementById('lightboxStats');
+            setTimeout(() => {
+                statsContainer.innerHTML = `
+                    <div style="grid-column: 1 / -1; text-align: center; padding: 2rem;">
+                        <h3 style="color: #fff; margin-bottom: 1rem;">Unable to Load County Data</h3>
+                        <p style="color: #aaa; margin-bottom: 1.5rem;">
+                            ${metricLabels[metric]} trend data could not be loaded for ${countyName} County.
+                        </p>
+                        <p style="color: #666; font-size: 0.9rem;">
+                            County FIPS: ${countyId}
+                        </p>
+                        <p style="color: #666; font-size: 0.9rem;">
+                            Error: ${error.message}
+                        </p>
+                    </div>
+                `;
+            }, 100);
+        }
+    }
+    
+    async showDCDetails() {
+        const detailContent = document.getElementById('detailContent');
+        
+        // Update breadcrumb
+        this.updateBreadcrumb('state', null, 'District of Columbia');
+        this.showBackButton();
+        this.hideCloseButton();
+        
+        // Update data info
+        const dataInfo = document.getElementById('dataInfo');
+        if (dataInfo) {
+            dataInfo.textContent = 'Loading DC market data...';
+        }
+        
+        try {
+            // Load DC state-level data as a substitute for county data
+            const response = await fetch(`${this.API_BASE_URL}/state/District of Columbia`);
+            if (response.ok) {
+                const dcData = await response.json();
+                this.displayDCDetails(dcData);
+            } else {
+                this.displayDCDetails(null);
+            }
+        } catch (error) {
+            console.error('Failed to load DC market data:', error);
+            this.displayDCDetails(null);
+        }
+    }
+    
+    displayDCDetails(dcData) {
+        const detailContent = document.getElementById('detailContent');
+        
+        let content = `<h3>District of Columbia</h3>`;
+        
+        if (dcData) {
+            content += `
+                <div class="metric-section">
+                    <h4>Market Overview</h4>
+                    <div class="metric-row">
+                        <span class="metric-label">Median Listing Price:</span>
+                        <span class="metric-value">$${dcData.median_listing_price?.toLocaleString() || 'N/A'}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Active Listings:</span>
+                        <span class="metric-value">${dcData.active_listing_count?.toLocaleString() || 'N/A'}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">New Listings:</span>
+                        <span class="metric-value">${dcData.new_listing_count?.toLocaleString() || 'N/A'}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Median Days on Market:</span>
+                        <span class="metric-value">${dcData.median_days_on_market || 'N/A'}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Total Listings:</span>
+                        <span class="metric-value">${dcData.total_listing_count?.toLocaleString() || 'N/A'}</span>
+                    </div>
+                    <div class="metric-row">
+                        <span class="metric-label">Pending Ratio:</span>
+                        <span class="metric-value">${dcData.pending_ratio ? (dcData.pending_ratio * 100).toFixed(1) + '%' : 'N/A'}</span>
+                    </div>
+                </div>
+            `;
+        } else {
+            content += `
+                <div class="metric-section">
+                    <p>The District of Columbia operates as a single administrative unit without counties.</p>
+                    <p>Market data not currently available.</p>
+                </div>
+            `;
+        }
+        
+        detailContent.innerHTML = content;
+        
+        // Update data info
+        const dataInfo = document.getElementById('dataInfo');
+        if (dataInfo) {
+            dataInfo.textContent = 'DC market data loaded • District operates as single unit';
+        }
+    }
+    
+    showCountyDetails(countyFIPS, countyName, countyData) {
+        console.log(`Showing details for ${countyName} (${countyFIPS})`);
+        
+        // Store current county data for access in lightboxes
+        this.currentCountyData = countyData;
+        
+        // Update breadcrumb to show county level
+        this.updateBreadcrumb('county', countyName, this.currentDrilledState);
+        
+        // Show back button for county level, hide close button
+        this.showBackButton();
+        this.hideCloseButton();
+        
+        // Clear the trends section and destroy chart when switching to county view
+        const trendsSection = document.getElementById('trendsSection');
+        if (trendsSection) {
+            trendsSection.style.display = 'none';
+            // Destroy any existing trends chart
+            if (this.trendsChart) {
+                this.trendsChart.destroy();
+                this.trendsChart = null;
+            }
+        }
+        
+        const detailContent = document.getElementById('detailContent');
+        if (!detailContent || !countyData) return;
+        
+        detailContent.innerHTML = `
+            <div class="county-detail">
+                <h4>${countyName} County</h4>
+                <div class="county-metrics">
+                    <div class="metric">
+                        <span class="label">Median Listing Price:</span>
+                        <span class="value">$${countyData.median_listing_price?.toLocaleString() || 'N/A'}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Active Listings:</span>
+                        <span class="value">${countyData.active_listing_count?.toLocaleString() || 'N/A'}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">New Listings:</span>
+                        <span class="value">${countyData.new_listing_count?.toLocaleString() || 'N/A'}</span>
+                    </div>
+                    <div class="metric">
+                        <span class="label">Median Days on Market:</span>
+                        <span class="value">${countyData.median_days_on_market || 'N/A'}</span>
+                    </div>
+                </div>
+                <button onclick="dashboard.loadCountyTrends('${countyFIPS}', '${countyName}')" class="trend-button">
+                    View 5-Year Trends
+                </button>
+            </div>
+        `;
+    }
+    
+    async loadCountyTrends(countyFIPS, countyName) {
+        try {
+            const response = await fetch(`${this.API_BASE_URL}/county/${countyFIPS}/trends`);
+            if (!response.ok) throw new Error('Failed to load trends');
+            
+            const trendData = await response.json();
+            this.displayTrendLightbox(trendData, `${countyName} County`);
+        } catch (error) {
+            console.error('Failed to load county trends:', error);
+        }
+    }
+    
+    returnToStateView() {
+        console.log('Returning to state view...');
+        
+        // Clear county selection but keep state
+        this.selectedCountyLayer = null;
+        this.currentDrillLevel = 'state';
+        
+        // Clear county details from sidebar but don't restore to default
+        const detailContent = document.getElementById('detailContent');
+        const trendsSection = document.getElementById('trendsSection');
+        
+        if (trendsSection) {
+            trendsSection.style.display = 'none';
+            
+            // Clear any existing trends chart when returning to state view
+            if (this.trendsChart) {
+                this.trendsChart.destroy();
+                this.trendsChart = null;
+            }
+        }
+        
+        if (detailContent && this.currentDrilledState) {
+            detailContent.innerHTML = `
+                <div class="sidebar-intro">
+                    <h3>${this.currentDrilledState} Counties</h3>
+                    <p>Click on a county to view detailed market analysis.</p>
+                </div>
+            `;
+        }
+        
+        // Update breadcrumb and header info  
+        this.updateBreadcrumb('county', null, this.currentDrilledState);
+        const dataInfo = document.getElementById('dataInfo');
+        if (dataInfo) {
+            dataInfo.textContent = `${this.currentDrilledState} counties loaded • Click a county for market data`;
+        }
+    }
+
+    returnToNationalCountyView() {
+        console.log('Returning to national county view...');
+        this.currentDrilledState = null;
+        this.currentDrillLevel = 'national';
+        
+        // Clear any selected county and state
+        this.selectedCountyLayer = null;
+        this.selectedStateLayer = null;
+        
+        // Restore default sidebar content
+        this.restoreDefaultSidebar();
+        
+        // Update breadcrumb and header info
+        this.updateBreadcrumb('national');
+        this.hideCloseButton();
+        this.hideBackButton();
+        const dataInfo = document.getElementById('dataInfo');
+        if (dataInfo) {
+            dataInfo.textContent = 'Click on a state to view its counties';
+        }
+        
+        // Clean up event handlers
+        this.map.off('click');
+        if (this.currentEscHandler) {
+            document.removeEventListener('keydown', this.currentEscHandler);
+            this.currentEscHandler = null;
+        }
+        
+        // Clear the current layer first
+        if (this.currentLayer) {
+            this.map.removeLayer(this.currentLayer);
+            this.currentLayer = null;
+        }
+        
+        // Reset map view with smooth animation
+        this.map.setView([39.50, -98.35], 4, {
+            animate: true,
+            duration: 0.5
+        });
+        
+        // Reload national state boundaries after a short delay
+        setTimeout(() => {
+            this.showStateBoundariesForCountyView();
+        }, 200);
+    }
+    
+    updateSidebarTitle() {
+        const sidebarTitle = document.querySelector('#detailPanel h3');
+        if (sidebarTitle) {
+            let title = '';
+            switch (this.currentView) {
+                case 'state':
+                    title = 'State Market Analysis';
+                    break;
+                case 'metro':
+                    title = 'Metro Market Analysis';
+                    break;
+                case 'county':
+                    title = 'County Market Analysis';
+                    break;
+                default:
+                    title = 'Market Analysis';
+            }
+            sidebarTitle.textContent = title;
+        }
+    }
+    
+    restoreDefaultSidebar() {
+        const detailContent = document.getElementById('detailContent');
+        const trendsSection = document.getElementById('trendsSection');
+        
+        // Close any open lightboxes
+        const trendLightbox = document.getElementById('trendLightbox');
+        if (trendLightbox) {
+            trendLightbox.classList.remove('active');
+            
+            // Only destroy chart when closing lightbox, not on view change
+            if (window.trendChart) {
+                window.trendChart.destroy();
+                window.trendChart = null;
+            }
+        }
+        
+        // Clear any stored county data but preserve state data for backing out
+        this.currentCountyData = null;
+        
+        // Hide trends section
+        if (trendsSection) {
+            trendsSection.style.display = 'none';
+        }
+        
+        // Restore default sidebar content based on current view
+        if (detailContent) {
+            let content = '';
+            switch (this.currentView) {
+                case 'state':
+                    content = `
+                        <div class="sidebar-intro">
+                            <p>Click on a state to view comprehensive market analysis including:</p>
+                            <ul>
+                                <li>Volatility analysis</li>
+                                <li>Month-over-Month changes</li>
+                                <li>Year-over-Year trends</li>
+                                <li>Market positioning analysis</li>
+                            </ul>
+                        </div>
+                    `;
+                    break;
+                case 'metro':
+                    content = `
+                        <div class="sidebar-intro">
+                            <p>Click on a metro area to view comprehensive market analysis including:</p>
+                            <ul>
+                                <li>Volatility analysis</li>
+                                <li>Month-over-Month changes</li>
+                                <li>Year-over-Year trends</li>
+                                <li>Market positioning analysis</li>
+                            </ul>
+                        </div>
+                    `;
+                    break;
+                case 'county':
+                    content = `
+                        <div class="sidebar-intro">
+                            <p>Click on a state to view its counties, then click a county for comprehensive market analysis including:</p>
+                            <ul>
+                                <li>Volatility analysis</li>
+                                <li>Month-over-Month changes</li>
+                                <li>Year-over-Year trends</li>
+                                <li>Market positioning analysis</li>
+                            </ul>
+                        </div>
+                    `;
+                    break;
+                default:
+                    content = `
+                        <div class="sidebar-intro">
+                            <p>Click on a location to view comprehensive market analysis including:</p>
+                            <ul>
+                                <li>Volatility analysis</li>
+                                <li>Month-over-Month changes</li>
+                                <li>Year-over-Year trends</li>
+                                <li>Market positioning analysis</li>
+                            </ul>
+                        </div>
+                    `;
+            }
+            detailContent.innerHTML = content;
+        }
+    }
+    
+    getStateNameFromFIPS(stateFIPS) {
+        const fipsToState = {
+            '01': 'Alabama', '02': 'Alaska', '04': 'Arizona', '05': 'Arkansas', '06': 'California',
+            '08': 'Colorado', '09': 'Connecticut', '10': 'Delaware', '11': 'District of Columbia',
+            '12': 'Florida', '13': 'Georgia', '15': 'Hawaii', '16': 'Idaho', '17': 'Illinois',
+            '18': 'Indiana', '19': 'Iowa', '20': 'Kansas', '21': 'Kentucky', '22': 'Louisiana',
+            '23': 'Maine', '24': 'Maryland', '25': 'Massachusetts', '26': 'Michigan', '27': 'Minnesota',
+            '28': 'Mississippi', '29': 'Missouri', '30': 'Montana', '31': 'Nebraska', '32': 'Nevada',
+            '33': 'New Hampshire', '34': 'New Jersey', '35': 'New Mexico', '36': 'New York',
+            '37': 'North Carolina', '38': 'North Dakota', '39': 'Ohio', '40': 'Oklahoma',
+            '41': 'Oregon', '42': 'Pennsylvania', '44': 'Rhode Island', '45': 'South Carolina',
+            '46': 'South Dakota', '47': 'Tennessee', '48': 'Texas', '49': 'Utah', '50': 'Vermont',
+            '51': 'Virginia', '53': 'Washington', '54': 'West Virginia', '55': 'Wisconsin', '56': 'Wyoming'
+        };
+        return fipsToState[stateFIPS] || 'Unknown';
+    }
+    
+    getStateAbbreviation(stateName) {
+        const stateToAbbrev = {
+            'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
+            'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'District of Columbia': 'DC',
+            'Florida': 'FL', 'Georgia': 'GA', 'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL',
+            'Indiana': 'IN', 'Iowa': 'IA', 'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA',
+            'Maine': 'ME', 'Maryland': 'MD', 'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN',
+            'Mississippi': 'MS', 'Missouri': 'MO', 'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV',
+            'New Hampshire': 'NH', 'New Jersey': 'NJ', 'New Mexico': 'NM', 'New York': 'NY',
+            'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH', 'Oklahoma': 'OK',
+            'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+            'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
+            'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY'
+        };
+        return stateToAbbrev[stateName] || stateName;
+    }
+    
+    // Breadcrumb and Navigation System
+    updateBreadcrumb(view, county = null, state = null) {
+        const breadcrumbNav = document.getElementById('breadcrumbNav');
+        const nationalCrumb = document.getElementById('nationalCrumb');
+        const stateCrumb = document.getElementById('stateCrumb');
+        const stateSeparator = document.getElementById('stateSeparator');
+        const countyCrumb = document.getElementById('countyCrumb');
+        
+        if (!breadcrumbNav) return;
+        
+        // Show/hide breadcrumb based on drill-down state
+        if (view === 'county' && (state || county)) {
+            breadcrumbNav.style.display = 'flex';
+            
+            // Always show national level
+            nationalCrumb.onclick = () => this.returnToNationalCountyView();
+            
+            if (state && !county) {
+                // State level: National > State
+                stateCrumb.textContent = state;
+                stateCrumb.style.display = 'inline';
+                stateSeparator.style.display = 'inline';
+                stateCrumb.classList.add('active');
+                countyCrumb.style.display = 'none';
+                
+                stateCrumb.onclick = null; // Current level, not clickable
+            } else if (county && state) {
+                // County level: National > State > County
+                stateCrumb.textContent = state;
+                stateCrumb.style.display = 'inline';
+                stateSeparator.style.display = 'inline';
+                stateCrumb.classList.remove('active');
+                
+                countyCrumb.textContent = county;
+                countyCrumb.style.display = 'inline';
+                countyCrumb.classList.add('active');
+                
+                stateCrumb.onclick = () => this.returnToStateView(state);
+            }
+        } else {
+            // Hide breadcrumb for national views
+            breadcrumbNav.style.display = 'none';
+        }
+    }
+    
+    returnToStateView(stateName) {
+        console.log(`Returning to ${stateName} state view...`);
+        this.currentDrilledState = stateName;
+        this.currentDrillLevel = 'state';
+        
+        // Clear any selected county
+        if (this.selectedCountyLayer) {
+            this.selectedCountyLayer.setStyle({
+                fillColor: '#f0f0f0',
+                fillOpacity: 0.4,
+                weight: 1,
+                color: '#999'
+            });
+            this.selectedCountyLayer = null;
+        }
+        
+        // Show back button for state view, hide close button
+        this.showBackButton();
+        this.hideCloseButton();
+        
+        // Update breadcrumb and header info for state view
+        this.updateBreadcrumb('county', null, stateName);
+        const dataInfo = document.getElementById('dataInfo');
+        if (dataInfo) {
+            dataInfo.textContent = `Viewing ${stateName} counties • Click county for details • Click ↩ to return to national view`;
+        }
+        
+        // Clear county details from sidebar
+        const detailContent = document.getElementById('detailContent');
+        if (detailContent) {
+            detailContent.innerHTML = `
+                <div class="sidebar-intro">
+                    <p>Click on a county to view comprehensive market analysis including:</p>
+                    <ul>
+                        <li>Volatility analysis</li>
+                        <li>Month-over-Month changes</li>
+                        <li>Year-over-Year trends</li>
+                        <li>Market positioning analysis</li>
+                    </ul>
+                </div>
+            `;
+        }
+        
+        // Hide the trends section when returning to state view (no state-level chart in county view)
+        const trendsSection = document.getElementById('trendsSection');
+        if (trendsSection) {
+            trendsSection.style.display = 'none';
+            
+            // Clear any existing charts
+            if (this.trendsChart) {
+                this.trendsChart.destroy();
+                this.trendsChart = null;
+            }
+            if (window.trendChart) {
+                window.trendChart.destroy();
+                window.trendChart = null;
+            }
+        }
+        
+        this.showStateCounties(stateName);
+    }
+    
+    showCloseButton() {
+        if (this.closeButton) {
+            this.closeButton.style.display = 'flex';
+        }
+    }
+    
+    hideCloseButton() {
+        if (this.closeButton) {
+            this.closeButton.style.display = 'none';
+        }
+    }
+    
+    showBackButton() {
+        if (this.backButton) {
+            this.backButton.style.display = 'flex';
+        }
+    }
+    
+    hideBackButton() {
+        if (this.backButton) {
+            this.backButton.style.display = 'none';
+        }
+    }
+    
+    returnToPreviousLevel() {
+        console.log('Return to previous level - current level:', this.currentDrillLevel);
+        
+        if (this.currentView === 'county') {
+            if (this.currentDrillLevel === 'county') {
+                // County level: return to state counties view
+                this.returnToStateView(this.currentDrilledState);
+            } else if (this.currentDrillLevel === 'state') {
+                // State level: return to national view
+                this.returnToNationalCountyView();
+            }
+        }
+    }
+    
+    returnToNationalView() {
+        console.log('Hierarchical navigation - current level:', this.currentDrillLevel);
+        
+        // Handle different view types with hierarchical navigation
+        if (this.currentView === 'county') {
+            if (this.currentDrillLevel === 'county') {
+                // County level: go back to state view
+                this.returnToStateView();
+            } else if (this.currentDrillLevel === 'state') {
+                // State level: go back to national view
+                this.returnToNationalCountyView();
+            } else {
+                // Already at national level
+                this.returnToNationalCountyView();
+            }
+        } else if (this.currentView === 'state') {
+            // Future: state drill-down return logic
+            this.cleanupViewState();
+            this.createBasicStateLayer();
+        } else if (this.currentView === 'metro') {
+            // Future: metro drill-down return logic  
+            this.cleanupViewState();
+            this.createMetroLayer();
+        }
+        
+        // Always hide navigation buttons when returning to national
+        this.hideCloseButton();
+        this.hideBackButton();
+    }
+    
     createMetroMarker(coords, color, radius, householdRank) {
         // Determine marker type based on household rank (1 = largest metro)
         // Triangle: Top 50 metros (1-50)
@@ -775,31 +1877,26 @@ class RealEstateDashboard {
     showPopup(latlng, stateName, stateData) {
         const popupContent = `
             <div class="popup-title" style="color: #ffffff; font-weight: bold; margin-bottom: 0.75rem; text-align: center;">${stateName}</div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; font-size: 0.75rem; min-width: 280px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.75rem; min-width: 240px;">
                 <!-- Header Row -->
                 <div style="color: #ffffff; font-weight: bold; text-align: center; border-bottom: 1px solid #ffffff; padding-bottom: 0.25rem;">Metric</div>
                 <div style="color: #ffffff; font-weight: bold; text-align: center; border-bottom: 1px solid #ffffff; padding-bottom: 0.25rem;">Current</div>
-                <div style="color: #ffffff; font-weight: bold; text-align: center; border-bottom: 1px solid #ffffff; padding-bottom: 0.25rem;">5Y Beta</div>
                 
                 <!-- Active Listings Row -->
                 <div style="color: #ffffff; padding: 0.25rem 0;">Active</div>
                 <div style="color: #ffffff; font-weight: bold; text-align: right; padding: 0.25rem 0;">${Math.round(stateData.active_listing_count || 0).toLocaleString()}</div>
-                <div style="color: #ffffff; text-align: right; padding: 0.25rem 0;">${this.formatBeta(stateData.active_listing_count_beta_5y) || 'N/A'}</div>
                 
                 <!-- New Listings Row -->
                 <div style="color: #ffffff; padding: 0.25rem 0;">New</div>
                 <div style="color: #ffffff; font-weight: bold; text-align: right; padding: 0.25rem 0;">${Math.round(stateData.new_listing_count || 0).toLocaleString()}</div>
-                <div style="color: #ffffff; text-align: right; padding: 0.25rem 0;">${this.formatBeta(stateData.new_listing_count_beta_5y) || 'N/A'}</div>
                 
                 <!-- Pending Listings Row -->
                 <div style="color: #ffffff; padding: 0.25rem 0;">Pending</div>
                 <div style="color: #ffffff; font-weight: bold; text-align: right; padding: 0.25rem 0;">${Math.round(stateData.pending_listing_count || 0).toLocaleString()}</div>
-                <div style="color: #ffffff; text-align: right; padding: 0.25rem 0;">${this.formatBeta(stateData.pending_listing_count_beta_5y) || 'N/A'}</div>
                 
                 <!-- Median Price Row -->
                 <div style="color: #ffffff; padding: 0.25rem 0;">Median ($)</div>
                 <div style="color: #ffffff; font-weight: bold; text-align: right; padding: 0.25rem 0;">$${Math.round(stateData.median_listing_price || 0).toLocaleString()}</div>
-                <div style="color: #ffffff; text-align: right; padding: 0.25rem 0;">${this.formatBeta(stateData.median_listing_price_beta_5y) || 'N/A'}</div>
             </div>
             <div style="margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid #ffffff; font-size: 0.7rem; color: #ffffff; text-align: center;">
                 Click for detailed analysis • ${this.formatDate(stateData.last_updated)}
@@ -833,27 +1930,6 @@ class RealEstateDashboard {
             <div style="text-align: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #444;">
                 <h2 style="color: #ffffff; margin: 0; font-size: 1.4rem;">${locationName}</h2>
                 <span style="color: #aaa; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">${locationTypeLabel}: ${locationId} • ${this.formatDate(locationData.last_updated)}</span>
-            </div>
-            
-            <div class="beta-summary">
-                <h4 style="color: #ffffff; margin-bottom: 0.75rem; text-align: center;">Active Listings Beta Timeline</h4>
-                <div class="beta-timeline">
-                    <div class="beta-item">
-                        <div class="period">1 Year</div>
-                        <div class="value">${this.formatBeta(locationData.active_listing_count_beta_1y)}</div>
-                    </div>
-                    <div class="beta-item">
-                        <div class="period">3 Year</div>
-                        <div class="value">${this.formatBeta(locationData.active_listing_count_beta_3y)}</div>
-                    </div>
-                    <div class="beta-item">
-                        <div class="period">5 Year</div>
-                        <div class="value">${this.formatBeta(locationData.active_listing_count_beta_5y)}</div>
-                    </div>
-                </div>
-                <div style="text-align: center; margin-top: 0.75rem; font-size: 0.7rem; color: #999;">
-                    ${this.getBetaInterpretation(locationData.active_listing_count_beta_5y)}
-                </div>
             </div>
             
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto auto; gap: 1rem; margin-bottom: 1rem;">
@@ -909,29 +1985,14 @@ class RealEstateDashboard {
                     </div>
                 </div>
             </div>
-            
-            <div style="margin-top: 1.5rem; padding: 1rem; background: #1e1e1e; border-radius: 8px; border: 1px solid #444;">
-                <h5 style="color: #ffffff; margin-bottom: 0.75rem; text-align: center;">Market Positioning</h5>
-                <div style="font-size: 0.75rem; color: #ccc; line-height: 1.4;">
-                    <div style="margin-bottom: 0.5rem;">
-                        <strong style="color: #00ff7f;">Low Beta (&lt; 0.8):</strong> More stable than national average
-                    </div>
-                    <div style="margin-bottom: 0.5rem;">
-                        <strong style="color: #ffd700;">Market Beta (0.8-1.2):</strong> Moves with national trends
-                    </div>
-                    <div>
-                        <strong style="color: #ff6b6b;">High Beta (&gt; 1.2):</strong> More volatile than national average
-                    </div>
-                </div>
-            </div>
         `;
         
         detailContent.innerHTML = content;
         
-        // Show trends section for both states and metros
+        // Show trends section for both states and metros - DISABLED
         const trendsSection = document.getElementById('trendsSection');
         if (trendsSection) {
-            trendsSection.style.display = 'block';
+            trendsSection.style.display = 'none'; // Keep trends section hidden
         }
     }
     
@@ -954,7 +2015,7 @@ class RealEstateDashboard {
     
     formatPercent(value) {
         if (typeof value !== 'number' || isNaN(value)) return 'N/A';
-        return (value * 100).toFixed(1);
+        return value.toFixed(1);
     }
     
     formatPrice(value) {
@@ -974,6 +2035,7 @@ class RealEstateDashboard {
     
     async loadTrendChart(level, identifier) {
         console.log('Loading trend chart for:', level, identifier);
+        console.log('DEBUG: Function started');
         
         const trendsSection = document.getElementById('trendsSection');
         const trendLocation = document.getElementById('trendLocation');
@@ -983,8 +2045,11 @@ class RealEstateDashboard {
             return;
         }
         
-        // Show trends section
-        trendsSection.style.display = 'block';
+        // Show trends section - DISABLED
+        console.log('DEBUG: About to show trends section');
+        console.log('DEBUG: Trends section element:', trendsSection);
+        trendsSection.style.display = 'none'; // Keep trends section hidden
+        console.log('DEBUG: Trends section kept hidden');
         
         // Update location display
         if (trendLocation) {
@@ -995,11 +2060,13 @@ class RealEstateDashboard {
         this.showTrendLoading();
         
         try {
+            console.log('DEBUG: Entered try block');
             let trendData;
             
             // Use SQLite API for both state and metro data - v2
             let apiIdentifier = identifier;
             let displayName = identifier; // Keep original name for display
+            console.log('DEBUG: Set initial identifiers');
             
             if (level === 'metro') {
                 // Check if identifier is already a CBSA code (numeric)
@@ -1037,9 +2104,15 @@ class RealEstateDashboard {
                 }
             }
             
+            console.log('DEBUG: About to make fetch request');
+            console.log(`Fetching from URL: ${this.API_BASE_URL}/trends/${level}/${encodeURIComponent(apiIdentifier)}`);
             const response = await fetch(`${this.API_BASE_URL}/trends/${level}/${encodeURIComponent(apiIdentifier)}`);
+            console.log('DEBUG: Fetch completed');
+            console.log('Response status:', response.status);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             trendData = await response.json();
+            console.log('DEBUG: Response parsed as JSON');
+            console.log('Trend data received:', trendData);
             
             if (trendData) {
                 // Override the identifier in trendData with our display name
@@ -1052,7 +2125,11 @@ class RealEstateDashboard {
             }
             
         } catch (error) {
-            console.error('Error loading trend data:', error);
+            console.error('DEBUG: Caught error in loadTrendChart');
+            console.error('Error type:', error.constructor.name);
+            console.error('Error message:', error.message);
+            console.error('Error stack:', error.stack);
+            console.error('Full error object:', error);
             this.showTrendError(`Failed to load trend data: ${error.message}`);
         }
     }
@@ -1074,9 +2151,11 @@ class RealEstateDashboard {
     
     renderTrendChart(trendData) {
         console.log('Rendering trend chart with data:', trendData);
+        console.log('DEBUG: renderTrendChart started');
         
         // Destroy existing chart if it exists
         if (this.trendsChart) {
+            console.log('DEBUG: Destroying existing chart');
             this.trendsChart.destroy();
         }
         
@@ -1087,6 +2166,7 @@ class RealEstateDashboard {
             return;
         }
         
+        console.log('DEBUG: Chart container found:', chartContainer);
         chartContainer.innerHTML = '<canvas id="trendsChart"></canvas>';
         
         // Get fresh canvas reference
@@ -1096,10 +2176,16 @@ class RealEstateDashboard {
             return;
         }
         
-        this.trendsChart = new Chart(canvas, {
-            type: 'line',
-            data: trendData.data,
-            options: {
+        console.log('DEBUG: Canvas created:', canvas);
+        
+        console.log('DEBUG: About to create Chart.js instance');
+        console.log('DEBUG: Chart data:', trendData.data);
+        
+        try {
+            this.trendsChart = new Chart(canvas, {
+                type: 'line',
+                data: trendData.data,
+                options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 aspectRatio: 1.8,
@@ -1183,6 +2269,16 @@ class RealEstateDashboard {
                 }
             }
         });
+            console.log('DEBUG: Chart.js instance created successfully');
+            console.log('DEBUG: Chart object:', this.trendsChart);
+            
+        } catch (error) {
+            console.error('DEBUG: Error creating Chart.js instance');
+            console.error('Error type:', error.constructor.name);
+            console.error('Error message:', error.message);
+            console.error('Error stack:', error.stack);
+            console.error('Full error object:', error);
+        }
     }
     
     
@@ -1245,7 +2341,7 @@ class RealEstateDashboard {
                     const medianDaysData = await response.json();
                     setTimeout(() => {
                         this.renderMedianDaysComparisonChart(medianDaysData, locationName);
-                        this.populateMedianDaysStats(medianDaysData, statsContainer);
+                        this.populateMedianDaysStats(medianDaysData, statsContainer, data);
                     }, 100);
                     return;
                 }
@@ -1262,7 +2358,7 @@ class RealEstateDashboard {
                     const medianDaysData = await response.json();
                     setTimeout(() => {
                         this.renderMedianDaysComparisonChart(medianDaysData, locationName);
-                        this.populateStateMedianDaysStats(medianDaysData, statsContainer);
+                        this.populateStateMedianDaysStats(medianDaysData, statsContainer, data);
                     }, 100);
                     return;
                 }
@@ -1305,7 +2401,7 @@ class RealEstateDashboard {
                         const indexedData = await response.json();
                         setTimeout(() => {
                             this.renderIndexedPerformanceChart(indexedData, locationName);
-                            this.populateIndexedPerformanceStats(indexedData, statsContainer);
+                            this.populateIndexedPerformanceStats(indexedData, statsContainer, metric, data);
                         }, 100);
                         return;
                     }
@@ -1427,6 +2523,10 @@ class RealEstateDashboard {
         const minValue = Math.min(...trendData.map(d => d.value));
         const avgValue = Math.round(trendData.reduce((sum, d) => sum + d.value, 0) / trendData.length);
         
+        // Get the appropriate Beta (5Y) value for this metric
+        const betaField = `${metric}_beta_5y`;
+        const betaValue = stateData[betaField];
+        
         const formatValue = (value) => {
             if (isPrice) {
                 return '$' + Math.round(value).toLocaleString();
@@ -1456,6 +2556,10 @@ class RealEstateDashboard {
             <div class="lightbox-stat">
                 <div class="lightbox-stat-label">5-Year Average</div>
                 <div class="lightbox-stat-value">${formatValue(avgValue)}</div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Beta (5Y)</div>
+                <div class="lightbox-stat-value" style="color: #fff">${betaValue ? this.formatBeta(betaValue) : 'N/A'}</div>
             </div>
         `;
     }
@@ -1557,7 +2661,7 @@ class RealEstateDashboard {
     }
     
     // Populate indexed performance statistics
-    populateIndexedPerformanceStats(indexedData, container) {
+    populateIndexedPerformanceStats(indexedData, container, metric, locationData) {
         const stats = indexedData.performance_stats;
         const latestPerformance = stats.latest_performance_vs_index * 100;
         const performanceColor = latestPerformance > 0 ? '#00ff7f' : '#ff6b6b';
@@ -1566,6 +2670,16 @@ class RealEstateDashboard {
         // Calculate some additional metrics
         const totalGrowthActual = ((stats.latest_actual / stats.baseline_value) - 1) * 100;
         const totalGrowthIndexed = ((stats.latest_indexed / stats.baseline_value) - 1) * 100;
+        
+        // Determine the label for current value based on metric
+        const currentValueLabel = metric === 'median_listing_price' ? 'Current Median Price' : 'Current Count';
+        
+        // Get the appropriate Beta (5Y) value for this metric
+        let betaValue = null;
+        if (locationData) {
+            const betaField = `${metric}_beta_5y`;
+            betaValue = locationData[betaField];
+        }
         
         container.innerHTML = `
             <div class="lightbox-stat">
@@ -1587,8 +2701,12 @@ class RealEstateDashboard {
                 </div>
             </div>
             <div class="lightbox-stat">
-                <div class="lightbox-stat-label">Current Count</div>
+                <div class="lightbox-stat-label">${currentValueLabel}</div>
                 <div class="lightbox-stat-value">${Math.round(stats.latest_actual).toLocaleString()}</div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Beta (5Y)</div>
+                <div class="lightbox-stat-value" style="color: #fff">${betaValue ? this.formatBeta(betaValue) : 'N/A'}</div>
             </div>
         `;
     }
@@ -1664,13 +2782,16 @@ class RealEstateDashboard {
     }
     
     // Populate median days comparison statistics
-    populateMedianDaysStats(medianDaysData, container) {
+    populateMedianDaysStats(medianDaysData, container, locationData) {
         const stats = medianDaysData.stats;
         const difference = stats.difference;
         
         // Use the same conditional color as the chart (from API)
         const metroColor = medianDaysData.data.datasets[0].borderColor;
         const differenceColor = difference > 0 ? '#ff6b6b' : '#00ff7f'; // Red if slower, green if faster
+        
+        // Get the median days on market Beta (5Y) value
+        const betaValue = locationData ? locationData.median_days_on_market_beta_5y : null;
         
         container.innerHTML = `
             <div class="lightbox-stat">
@@ -1691,17 +2812,24 @@ class RealEstateDashboard {
                     ${difference > 0 ? '+' : ''}${Math.round(difference)} days
                 </div>
             </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Beta (5Y)</div>
+                <div class="lightbox-stat-value" style="color: #fff">${betaValue ? this.formatBeta(betaValue) : 'N/A'}</div>
+            </div>
         `;
     }
     
     // Populate state median days comparison statistics
-    populateStateMedianDaysStats(medianDaysData, container) {
+    populateStateMedianDaysStats(medianDaysData, container, locationData) {
         const stats = medianDaysData.stats;
         const difference = stats.difference;
         
         // Use the same conditional color as the chart (from API)
         const stateColor = medianDaysData.data.datasets[0].borderColor;
         const differenceColor = difference > 0 ? '#ff6b6b' : '#00ff7f'; // Red if slower, green if faster
+        
+        // Get the median days on market Beta (5Y) value
+        const betaValue = locationData ? locationData.median_days_on_market_beta_5y : null;
         
         container.innerHTML = `
             <div class="lightbox-stat">
@@ -1722,7 +2850,622 @@ class RealEstateDashboard {
                     ${difference > 0 ? '+' : ''}${Math.round(difference)} days
                 </div>
             </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Beta (5Y)</div>
+                <div class="lightbox-stat-value" style="color: #fff">${betaValue ? this.formatBeta(betaValue) : 'N/A'}</div>
+            </div>
         `;
+    }
+
+    renderCountyTrendChart(chartData, metric, countyId) {
+        const canvas = document.getElementById('lightboxChart');
+        if (!canvas) {
+            console.error('Lightbox chart canvas not found');
+            return;
+        }
+        
+        // Destroy existing chart if it exists
+        if (window.trendChart) {
+            window.trendChart.destroy();
+            window.trendChart = null;
+        }
+        
+        // Determine color based on metric type
+        let color;
+        if (metric === 'active_listing_count') {
+            color = '#3B82F6';
+        } else if (metric === 'new_listing_count') {
+            color = '#10B981';
+        } else if (metric === 'pending_listing_count') {
+            color = '#F59E0B';
+        } else {
+            color = '#6B7280';
+        }
+        
+        window.trendChart = new Chart(canvas, {
+            type: 'line',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: false
+                    },
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#ffffff',
+                        borderColor: '#ffffff',
+                        borderWidth: 1,
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                return `${context.dataset.label}: ${Math.round(value).toLocaleString()}`;
+                            },
+                            title: function(context) {
+                                return context[0].label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#ffffff',
+                            maxTicksLimit: 6,
+                            callback: function(value, index) {
+                                const label = this.getLabelForValue(value);
+                                return label.substring(0, 7);
+                            }
+                        }
+                    },
+                    y: {
+                        display: true,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#ffffff',
+                            callback: function(value) {
+                                return Math.round(value).toLocaleString();
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    populateCountyTrendStats(data, labels, container, metricLabel) {
+        if (!data || data.length === 0) {
+            container.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 2rem;">
+                    <p style="color: #aaa;">No trend data available</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Calculate basic statistics
+        const latest = data[data.length - 1];
+        const earliest = data[0];
+        const totalChange = ((latest - earliest) / earliest) * 100;
+        const totalChangeColor = totalChange > 0 ? '#00ff7f' : '#ff6b6b';
+        
+        // Calculate average value
+        const average = data.reduce((sum, val) => sum + val, 0) / data.length;
+        
+        // Find peak and valley
+        const maxValue = Math.max(...data);
+        const minValue = Math.min(...data);
+        const maxIndex = data.indexOf(maxValue);
+        const minIndex = data.indexOf(minValue);
+        const peakDate = labels[maxIndex];
+        const valleyDate = labels[minIndex];
+        
+        // Calculate 1-year change (last 12 months if available)
+        const oneYearAgoIndex = Math.max(0, data.length - 13);
+        const oneYearAgo = data[oneYearAgoIndex];
+        const oneYearChange = ((latest - oneYearAgo) / oneYearAgo) * 100;
+        const oneYearChangeColor = oneYearChange > 0 ? '#00ff7f' : '#ff6b6b';
+        
+        container.innerHTML = `
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Current Value</div>
+                <div class="lightbox-stat-value" style="color: #fff">
+                    ${Math.round(latest).toLocaleString()}
+                </div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">5-Year Change</div>
+                <div class="lightbox-stat-value" style="color: ${totalChangeColor}">
+                    ${totalChange > 0 ? '+' : ''}${totalChange.toFixed(1)}%
+                </div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">1-Year Change</div>
+                <div class="lightbox-stat-value" style="color: ${oneYearChangeColor}">
+                    ${oneYearChange > 0 ? '+' : ''}${oneYearChange.toFixed(1)}%
+                </div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">5-Year Average</div>
+                <div class="lightbox-stat-value" style="color: #64748B">
+                    ${Math.round(average).toLocaleString()}
+                </div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Peak Value</div>
+                <div class="lightbox-stat-value" style="color: #00ff7f">
+                    ${Math.round(maxValue).toLocaleString()}
+                </div>
+                <div class="lightbox-stat-date" style="font-size: 0.8rem; color: #aaa; margin-top: 0.25rem;">
+                    ${peakDate}
+                </div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Valley Value</div>
+                <div class="lightbox-stat-value" style="color: #ff6b6b">
+                    ${Math.round(minValue).toLocaleString()}
+                </div>
+                <div class="lightbox-stat-date" style="font-size: 0.8rem; color: #aaa; margin-top: 0.25rem;">
+                    ${valleyDate}
+                </div>
+            </div>
+        `;
+    }
+
+    renderCountyIndexedPerformanceChart(indexedData, countyName) {
+        const canvas = document.getElementById('lightboxChart');
+        if (!canvas) {
+            console.error('Lightbox chart canvas not found');
+            return;
+        }
+        
+        // Destroy existing chart if it exists
+        if (window.trendChart) {
+            window.trendChart.destroy();
+            window.trendChart = null;
+        }
+        
+        // Override the fill settings for better visibility
+        const chartData = {...indexedData.data};
+        chartData.datasets = chartData.datasets.map(dataset => {
+            if (dataset.label.includes('Actual')) {
+                // Remove fill completely for actual data
+                return {
+                    ...dataset,
+                    backgroundColor: 'transparent',
+                    fill: false // No fill under data points
+                };
+            }
+            return dataset;
+        });
+
+        window.trendChart = new Chart(canvas, {
+            type: 'line',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                layout: {
+                    padding: {
+                        top: 10,
+                        bottom: 20,
+                        left: 10,
+                        right: 10
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: false // Title is handled by HTML
+                    },
+                    legend: {
+                        labels: {
+                            color: '#ffffff',
+                            usePointStyle: true,
+                            padding: 20,
+                            font: {
+                                size: 12
+                            }
+                        },
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                        titleColor: '#ffffff',
+                        bodyColor: '#ffffff',
+                        borderColor: '#ffffff',
+                        borderWidth: 1,
+                        displayColors: true,
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                const label = context.dataset.label;
+                                return `${label}: ${Math.round(value).toLocaleString()}`;
+                            },
+                            afterBody: function(tooltipItems) {
+                                if (tooltipItems.length === 2) {
+                                    const actual = tooltipItems[0].parsed.y;
+                                    const indexed = tooltipItems[1].parsed.y;
+                                    const performance = ((actual / indexed) - 1) * 100;
+                                    const performanceLabel = performance > 0 ? 'Outperforming' : 'Underperforming';
+                                    return `${performanceLabel}: ${performance > 0 ? '+' : ''}${performance.toFixed(1)}%`;
+                                }
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        display: true,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#ffffff',
+                            maxTicksLimit: 6,
+                            callback: function(value, index) {
+                                const label = this.getLabelForValue(value);
+                                return label.substring(0, 7); // Show YYYY-MM format
+                            }
+                        }
+                    },
+                    y: {
+                        display: true,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#ffffff',
+                            callback: function(value) {
+                                return Math.round(value).toLocaleString();
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    async populateCountyIndexedPerformanceStats(indexedData, container, metric, countyData, countyFIPS) {
+        const stats = indexedData.performance_stats;
+        const latestPerformance = stats.latest_performance_vs_index * 100;
+        const performanceColor = latestPerformance > 0 ? '#00ff7f' : '#ff6b6b';
+        const performanceLabel = latestPerformance > 0 ? 'Outperforming' : 'Underperforming';
+        
+        // Calculate total growth - use same calculation as State view
+        const totalGrowthActual = ((stats.latest_actual / stats.baseline_value) - 1) * 100;
+        const totalGrowthNational = ((stats.latest_indexed / stats.baseline_value) - 1) * 100;
+        
+        // Determine the label for current value based on metric
+        const currentValueLabel = metric === 'median_listing_price' ? 'Current Median Price' : 'Current Count';
+        
+        // Calculate beta value dynamically for counties
+        let betaValue = null;
+        let betaDisplay = '<span style="color: #888;">Calculating...</span>';
+        
+        // Set stats container class for 5 stats layout
+        container.className = 'lightbox-stats stats-5';
+        
+        // Show initial content with calculating message
+        container.innerHTML = `
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Performance vs National</div>
+                <div class="lightbox-stat-value" style="color: ${performanceColor}">
+                    ${latestPerformance > 0 ? '+' : ''}${latestPerformance.toFixed(1)}%
+                </div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">Actual Growth (5Y)</div>
+                <div class="lightbox-stat-value" style="color: ${totalGrowthActual > 0 ? '#00ff7f' : '#ff6b6b'}">
+                    ${totalGrowthActual > 0 ? '+' : ''}${totalGrowthActual.toFixed(1)}%
+                </div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">National Growth (5Y)</div>
+                <div class="lightbox-stat-value" style="color: ${totalGrowthNational > 0 ? '#00ff7f' : '#ff6b6b'}">
+                    ${totalGrowthNational > 0 ? '+' : ''}${totalGrowthNational.toFixed(1)}%
+                </div>
+            </div>
+            <div class="lightbox-stat">
+                <div class="lightbox-stat-label">${currentValueLabel}</div>
+                <div class="lightbox-stat-value">${metric === 'median_listing_price' ? 
+                    '$' + Math.round(stats.latest_actual).toLocaleString() : 
+                    Math.round(stats.latest_actual).toLocaleString()}</div>
+            </div>
+            <div class="lightbox-stat" id="county-beta-stat">
+                <div class="lightbox-stat-label">Beta (5Y)</div>
+                <div class="lightbox-stat-value">${betaDisplay}</div>
+            </div>
+        `;
+        
+        // Calculate beta asynchronously and update the display
+        if (countyFIPS) {
+            try {
+                betaValue = await this.calculateCountyBeta(countyFIPS, metric);
+                const betaStat = document.getElementById('county-beta-stat');
+                if (betaStat) {
+                    const valueElement = betaStat.querySelector('.lightbox-stat-value');
+                    if (valueElement) {
+                        valueElement.innerHTML = betaValue ? 
+                            `<span style="color: #fff">${this.formatBeta(betaValue)}</span>` : 
+                            '<span style="color: #888;">N/A</span>';
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to calculate county beta:', error);
+                const betaStat = document.getElementById('county-beta-stat');
+                if (betaStat) {
+                    const valueElement = betaStat.querySelector('.lightbox-stat-value');
+                    if (valueElement) {
+                        valueElement.innerHTML = '<span style="color: #888;">N/A</span>';
+                    }
+                }
+            }
+        }
+    }
+
+    // Calculate beta coefficient for a county metric against national index
+    async calculateCountyBeta(countyFIPS, metric) {
+        try {
+            let countyData = null;
+            
+            if (metric === 'median_days_on_market') {
+                // For median days, use specific median days endpoint
+                const countyResponse = await fetch(`${this.API_BASE_URL}/county/${countyFIPS}/median-days-trends`);
+                if (!countyResponse.ok) return null;
+                
+                const countyTrends = await countyResponse.json();
+                countyData = countyTrends.data?.datasets?.[0]?.data;
+            } else {
+                // For other metrics, use general trends endpoint
+                const countyResponse = await fetch(`${this.API_BASE_URL}/county/${countyFIPS}/trends`);
+                if (!countyResponse.ok) return null;
+                
+                const countyTrends = await countyResponse.json();
+                countyData = countyTrends.data?.datasets?.[0]?.data;
+            }
+            
+            let nationalData = null;
+            
+            if (metric === 'median_listing_price') {
+                // For median price, fetch national data from database directly
+                const nationalPriceResponse = await fetch(`${this.API_BASE_URL}/trends/national-median-price`);
+                if (nationalPriceResponse.ok) {
+                    const nationalPriceData = await nationalPriceResponse.json();
+                    nationalData = nationalPriceData.data;
+                }
+            } else if (metric === 'median_days_on_market') {
+                // For median days, fetch national data from database directly
+                const nationalDaysResponse = await fetch(`${this.API_BASE_URL}/trends/national-median-days`);
+                if (nationalDaysResponse.ok) {
+                    const nationalDaysData = await nationalDaysResponse.json();
+                    nationalData = nationalDaysData.data;
+                }
+            } else {
+                // For other metrics, use the existing national trends endpoint
+                const nationalResponse = await fetch(`${this.API_BASE_URL}/trends/national/national`);
+                if (!nationalResponse.ok) return null;
+                
+                const nationalTrends = await nationalResponse.json();
+                
+                // Map metric names to dataset indices
+                const metricMap = {
+                    'active_listing_count': 0,
+                    'new_listing_count': 1, 
+                    'pending_listing_count': 2
+                };
+                const datasetIndex = metricMap[metric];
+                nationalData = nationalTrends.data?.datasets?.[datasetIndex]?.data;
+            }
+            
+            if (!countyData || !nationalData || countyData.length < 24) {
+                return null; // Need at least 2 years of data
+            }
+            
+            // Calculate beta using linear regression
+            return this.calculateBetaCoefficient(countyData, nationalData);
+            
+        } catch (error) {
+            console.warn('Failed to calculate county beta:', error);
+            return null;
+        }
+    }
+    
+    // Calculate beta coefficient using linear regression
+    calculateBetaCoefficient(assetReturns, marketReturns) {
+        if (!assetReturns || !marketReturns || assetReturns.length !== marketReturns.length) {
+            return null;
+        }
+        
+        // Calculate percentage changes (returns)
+        const assetChanges = [];
+        const marketChanges = [];
+        
+        for (let i = 1; i < assetReturns.length; i++) {
+            if (assetReturns[i] && assetReturns[i-1] && assetReturns[i-1] !== 0) {
+                assetChanges.push((assetReturns[i] - assetReturns[i-1]) / assetReturns[i-1]);
+            }
+            if (marketReturns[i] && marketReturns[i-1] && marketReturns[i-1] !== 0) {
+                marketChanges.push((marketReturns[i] - marketReturns[i-1]) / marketReturns[i-1]);
+            }
+        }
+        
+        if (assetChanges.length < 12) return null; // Need at least 1 year of returns
+        
+        // Calculate means
+        const assetMean = assetChanges.reduce((sum, val) => sum + val, 0) / assetChanges.length;
+        const marketMean = marketChanges.reduce((sum, val) => sum + val, 0) / marketChanges.length;
+        
+        // Calculate covariance and variance
+        let covariance = 0;
+        let marketVariance = 0;
+        
+        for (let i = 0; i < Math.min(assetChanges.length, marketChanges.length); i++) {
+            const assetDev = assetChanges[i] - assetMean;
+            const marketDev = marketChanges[i] - marketMean;
+            
+            covariance += assetDev * marketDev;
+            marketVariance += marketDev * marketDev;
+        }
+        
+        if (marketVariance === 0) return null;
+        
+        // Beta = Covariance(asset, market) / Variance(market)
+        return covariance / marketVariance;
+    }
+
+    // Show county median days trend with beta calculation
+    async showCountyMedianDaysTrend(countyFIPS, countyName, container) {
+        try {
+            // Get county median days trend data
+            const countyResponse = await fetch(`${this.API_BASE_URL}/county/${countyFIPS}/median-days-trends`);
+            if (!countyResponse.ok) {
+                throw new Error(`County median days trends not found (HTTP ${countyResponse.status})`);
+            }
+            
+            const countyTrends = await countyResponse.json();
+            
+            // Validate the data structure
+            if (!countyTrends || !countyTrends.data || !countyTrends.data.datasets || !countyTrends.data.datasets[0]) {
+                throw new Error('Invalid county trend data structure');
+            }
+            
+            // Get national median days data
+            const nationalChartResponse = await fetch(`${this.API_BASE_URL}/trends/national-median-days`);
+            if (!nationalChartResponse.ok) {
+                throw new Error('Failed to load national median days data');
+            }
+            
+            const nationalChartData = await nationalChartResponse.json();
+            
+            // Create comparison chart data structure with county-specific data
+            const comparisonData = {
+                data: {
+                    labels: countyTrends.data.labels,
+                    datasets: [
+                        {
+                            label: `${countyName} County`,
+                            data: countyTrends.data.datasets[0].data,
+                            borderColor: '#ff6347',
+                            backgroundColor: '#ff634720',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            pointBackgroundColor: '#ff6347',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 1,
+                            pointRadius: 3,
+                            pointHoverRadius: 5
+                        },
+                        {
+                            label: 'National Median Days',
+                            data: nationalChartData.data,
+                            borderColor: '#64748B',
+                            backgroundColor: '#64748B20',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            pointBackgroundColor: '#64748B',
+                            pointBorderColor: '#ffffff',
+                            pointBorderWidth: 1,
+                            pointRadius: 3,
+                            pointHoverRadius: 5
+                        }
+                    ]
+                }
+            };
+            
+            // Render comparison chart
+            setTimeout(() => {
+                this.renderMedianDaysComparisonChart(comparisonData, countyName);
+            }, 100);
+            
+            // Set stats container class for 4 stats layout
+            container.className = 'lightbox-stats stats-4';
+            
+            // Show initial stats with calculating beta message
+            container.innerHTML = `
+                <div class="lightbox-stat">
+                    <div class="lightbox-stat-label">Current Days</div>
+                    <div class="lightbox-stat-value">${this.currentCountyData?.median_days_on_market || 'N/A'} days</div>
+                </div>
+                <div class="lightbox-stat">
+                    <div class="lightbox-stat-label">National Average</div>
+                    <div class="lightbox-stat-value" style="color: #64748B">Calculating...</div>
+                </div>
+                <div class="lightbox-stat">
+                    <div class="lightbox-stat-label">Difference</div>
+                    <div class="lightbox-stat-value">Calculating...</div>
+                </div>
+                <div class="lightbox-stat" id="county-median-days-beta">
+                    <div class="lightbox-stat-label">Beta (5Y)</div>
+                    <div class="lightbox-stat-value" style="color: #888;">Calculating...</div>
+                </div>
+            `;
+            
+            // Calculate beta and national comparison asynchronously
+            const betaValue = await this.calculateCountyBeta(countyFIPS, 'median_days_on_market');
+            
+            // Get latest national median days for comparison
+            const nationalStatsResponse = await fetch(`${this.API_BASE_URL}/trends/national-median-days`);
+            let nationalAvg = null;
+            let difference = null;
+            
+            if (nationalStatsResponse.ok) {
+                const nationalStatsData = await nationalStatsResponse.json();
+                const latestNational = nationalStatsData.data[nationalStatsData.data.length - 1];
+                const currentCounty = this.currentCountyData?.median_days_on_market;
+                
+                if (latestNational && currentCounty) {
+                    nationalAvg = Math.round(latestNational);
+                    difference = Math.round(currentCounty - latestNational);
+                }
+            }
+            
+            // Update the display with calculated values (keep stats-4 class)
+            container.className = 'lightbox-stats stats-4';
+            container.innerHTML = `
+                <div class="lightbox-stat">
+                    <div class="lightbox-stat-label">Current Days</div>
+                    <div class="lightbox-stat-value" style="color: #ff6347;">${this.currentCountyData?.median_days_on_market || 'N/A'} days</div>
+                </div>
+                <div class="lightbox-stat">
+                    <div class="lightbox-stat-label">National Average</div>
+                    <div class="lightbox-stat-value" style="color: #64748B">${nationalAvg ? nationalAvg + ' days' : 'N/A'}</div>
+                </div>
+                <div class="lightbox-stat">
+                    <div class="lightbox-stat-label">Difference</div>
+                    <div class="lightbox-stat-value" style="color: ${difference && difference > 0 ? '#ff6b6b' : '#00ff7f'}">
+                        ${difference !== null ? (difference > 0 ? '+' : '') + difference + ' days' : 'N/A'}
+                    </div>
+                </div>
+                <div class="lightbox-stat">
+                    <div class="lightbox-stat-label">Beta (5Y)</div>
+                    <div class="lightbox-stat-value" style="color: #fff">${betaValue ? this.formatBeta(betaValue) : 'N/A'}</div>
+                </div>
+            `;
+            
+        } catch (error) {
+            console.error(`Failed to show county median days trend for ${countyName} (${countyFIPS}):`, error);
+            
+            // Show specific error message to help debug
+            container.innerHTML = `
+                <div style="grid-column: 1 / -1; text-align: center; padding: 2rem;">
+                    <h3 style="color: #fff; margin-bottom: 1rem;">County Data Unavailable</h3>
+                    <p style="color: #aaa; margin-bottom: 1rem;">Unable to load median days trend data for ${countyName} County.</p>
+                    <p style="color: #666; font-size: 0.9rem;">County FIPS: ${countyFIPS}</p>
+                    <p style="color: #666; font-size: 0.9rem;">Error: ${error.message}</p>
+                </div>
+            `;
+        }
     }
 }
 
