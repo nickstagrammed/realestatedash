@@ -325,6 +325,47 @@ def get_metro_betas(cbsa_code):
             conn.close()
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/state/<state>', methods=['GET'])
+def get_state_data(state):
+    """Get latest market data for a specific state"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database not found'}), 404
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Get latest month's data for the state
+        cursor.execute('''
+            SELECT s1.state, s1.median_listing_price, s1.active_listing_count,
+                   s1.new_listing_count, s1.pending_listing_count, s1.median_days_on_market,
+                   s1.pending_ratio, s1.total_listing_count
+            FROM state_timeseries s1
+            INNER JOIN (
+                SELECT state, MAX(month_date) as max_date
+                FROM state_timeseries
+                GROUP BY state
+            ) latest ON s1.state = latest.state AND s1.month_date = latest.max_date
+            WHERE UPPER(s1.state) = UPPER(?)
+            ORDER BY s1.month_date DESC
+            LIMIT 1
+        ''', (state,))
+        
+        state_data = cursor.fetchone()
+        conn.close()
+        
+        if not state_data:
+            return jsonify({'error': f'State not found: {state}'}), 404
+        
+        # Convert to dictionary
+        result = dict(state_data)
+        return jsonify(result)
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/betas/state/<state>', methods=['GET'])
 def get_state_betas(state):
     """Get beta calculations for a specific state"""
@@ -1097,6 +1138,305 @@ def get_state_metric_indexed_performance(state_id, table_name, actual_label, ind
             conn.close()
         return jsonify({'error': f'Internal error: {str(e)}'}), 500
 
+# County Data Endpoints
+@app.route('/api/counties/<state>', methods=['GET'])
+def get_counties_by_state(state):
+    """Get all counties for a specific state with latest data"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database not found'}), 404
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Convert full state name to abbreviation for county lookup
+        state_abbrev = get_state_abbreviation(state.lower())
+        if not state_abbrev:
+            return jsonify({'error': f'Invalid state: {state}'}), 400
+        
+        # Get latest month's county data for the state
+        cursor.execute('''
+            SELECT c1.county_fips, c1.county_name, c1.median_listing_price,
+                   c1.active_listing_count, c1.new_listing_count, c1.pending_listing_count,
+                   c1.median_days_on_market, c1.pending_ratio
+            FROM county_timeseries c1
+            INNER JOIN (
+                SELECT county_fips, MAX(month_date) as max_date
+                FROM county_timeseries
+                GROUP BY county_fips
+            ) latest ON c1.county_fips = latest.county_fips AND c1.month_date = latest.max_date
+            WHERE LOWER(c1.county_name) LIKE ?
+            ORDER BY c1.county_name
+        ''', (f'%, {state_abbrev.lower()}',))
+        
+        counties = cursor.fetchall()
+        conn.close()
+        
+        if not counties:
+            return jsonify({'error': f'No counties found for state: {state}'}), 404
+        
+        result = {}
+        for county in counties:
+            result[county['county_fips']] = {
+                'name': county['county_name'],
+                'median_listing_price': county['median_listing_price'],
+                'active_listing_count': county['active_listing_count'],
+                'new_listing_count': county['new_listing_count'],
+                'pending_listing_count': county['pending_listing_count'],
+                'median_days_on_market': county['median_days_on_market'],
+                'pending_ratio': county['pending_ratio']
+            }
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/county/<county_fips>', methods=['GET'])
+def get_county_data(county_fips):
+    """Get latest data for a specific county with MoM and YoY calculations"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database not found'}), 404
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Get latest 13 months of data for MoM and YoY calculations
+        cursor.execute('''
+            SELECT * FROM county_timeseries
+            WHERE county_fips = ?
+            ORDER BY month_date DESC
+            LIMIT 13
+        ''', (county_fips,))
+        
+        records = cursor.fetchall()
+        conn.close()
+        
+        if not records:
+            return jsonify({'error': f'County not found: {county_fips}'}), 404
+        
+        # Latest record is the first one due to DESC order
+        latest = dict(records[0])
+        
+        # Calculate MoM and YoY changes
+        def calculate_change(current_value, comparison_value):
+            if current_value and comparison_value and comparison_value != 0:
+                return ((current_value / comparison_value) - 1) * 100
+            return None
+        
+        # MoM calculations (compare with previous month)
+        if len(records) >= 2:
+            prev_month = records[1]
+            latest['active_listing_count_mm'] = calculate_change(latest['active_listing_count'], prev_month['active_listing_count'])
+            latest['new_listing_count_mm'] = calculate_change(latest['new_listing_count'], prev_month['new_listing_count'])
+            latest['pending_listing_count_mm'] = calculate_change(latest['pending_listing_count'], prev_month['pending_listing_count'])
+            latest['median_listing_price_mm'] = calculate_change(latest['median_listing_price'], prev_month['median_listing_price'])
+            latest['median_days_on_market_mm'] = calculate_change(latest['median_days_on_market'], prev_month['median_days_on_market'])
+        
+        # YoY calculations (compare with 12 months ago)
+        if len(records) >= 13:
+            year_ago = records[12]
+            latest['active_listing_count_yy'] = calculate_change(latest['active_listing_count'], year_ago['active_listing_count'])
+            latest['new_listing_count_yy'] = calculate_change(latest['new_listing_count'], year_ago['new_listing_count'])
+            latest['pending_listing_count_yy'] = calculate_change(latest['pending_listing_count'], year_ago['pending_listing_count'])
+            latest['median_listing_price_yy'] = calculate_change(latest['median_listing_price'], year_ago['median_listing_price'])
+            latest['median_days_on_market_yy'] = calculate_change(latest['median_days_on_market'], year_ago['median_days_on_market'])
+        
+        return jsonify(latest)
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/county/<county_fips>/trends', methods=['GET'])
+def get_county_trends(county_fips):
+    """Get 5-year trend data for a specific county"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database not found'}), 404
+    
+    try:
+        cursor = conn.cursor()
+        
+        # 5-year date range (July 2020 - July 2025)
+        start_date = 202007
+        end_date = 202507
+        
+        cursor.execute('''
+            SELECT month_date, active_listing_count, new_listing_count, pending_listing_count
+            FROM county_timeseries
+            WHERE county_fips = ? AND month_date BETWEEN ? AND ?
+            ORDER BY month_date
+        ''', (county_fips, start_date, end_date))
+        
+        data = cursor.fetchall()
+        conn.close()
+        
+        if not data:
+            return jsonify({'error': f'No trend data found for county: {county_fips}'}), 404
+        
+        # Format data for Chart.js
+        result = {
+            'level': 'county',
+            'identifier': county_fips,
+            'dateRange': f"{start_date}-{end_date}",
+            'data': {
+                'labels': [],
+                'datasets': [
+                    {
+                        'label': 'Active Listings',
+                        'data': [],
+                        'borderColor': '#3B82F6',
+                        'backgroundColor': 'rgba(59, 130, 246, 0.1)',
+                        'tension': 0.1
+                    },
+                    {
+                        'label': 'New Listings',
+                        'data': [],
+                        'borderColor': '#10B981',
+                        'backgroundColor': 'rgba(16, 185, 129, 0.1)',
+                        'tension': 0.1
+                    },
+                    {
+                        'label': 'Pending Sale',
+                        'data': [],
+                        'borderColor': '#F59E0B',
+                        'backgroundColor': 'rgba(245, 158, 11, 0.1)',
+                        'tension': 0.1
+                    }
+                ]
+            }
+        }
+        
+        # Convert YYYYMM to readable format and populate data
+        for row in data:
+            month_date = str(row['month_date'])
+            year = month_date[:4]
+            month = month_date[4:6]
+            label = f"{year}-{month}"
+            
+            result['data']['labels'].append(label)
+            result['data']['datasets'][0]['data'].append(row['active_listing_count'])
+            result['data']['datasets'][1]['data'].append(row['new_listing_count'])
+            result['data']['datasets'][2]['data'].append(row['pending_listing_count'])
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/counties/search', methods=['GET'])
+def search_counties():
+    """Search counties by name or FIPS code"""
+    query = request.args.get('q', '')
+    limit = request.args.get('limit', 50)
+    
+    if not query:
+        return jsonify({'error': 'Query parameter q is required'}), 400
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database not found'}), 404
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT DISTINCT county_fips, county_name
+            FROM county_timeseries 
+            WHERE county_name LIKE ? OR county_fips LIKE ?
+            ORDER BY county_name 
+            LIMIT ?
+        ''', (f'%{query}%', f'%{query}%', int(limit)))
+        
+        counties = cursor.fetchall()
+        conn.close()
+        
+        result = {}
+        for county in counties:
+            result[county['county_fips']] = county['county_name']
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/counties/<state>/boundaries', methods=['GET'])
+def get_state_county_boundaries(state):
+    """Get county boundaries for a specific state"""
+    try:
+        import json
+        from pathlib import Path
+        
+        # Load county boundaries file
+        boundaries_file = Path('county_boundaries.json')
+        if not boundaries_file.exists():
+            return jsonify({'error': 'County boundaries file not found'}), 404
+        
+        # Get state abbreviation
+        state_abbrev = get_state_abbreviation(state.lower())
+        if not state_abbrev:
+            return jsonify({'error': f'Invalid state: {state}'}), 400
+        
+        # Get state FIPS code
+        state_fips = get_state_fips(state_abbrev)
+        if not state_fips:
+            return jsonify({'error': f'FIPS code not found for state: {state}'}), 400
+        
+        with open(boundaries_file, 'r') as f:
+            data = json.load(f)
+        
+        # Filter counties for the specific state
+        state_counties = {
+            "type": "FeatureCollection",
+            "features": [
+                feature for feature in data['features']
+                if feature['properties']['STATE'] == state_fips
+            ]
+        }
+        
+        print(f"Filtered {len(state_counties['features'])} counties for {state}")
+        return jsonify(state_counties)
+        
+    except Exception as e:
+        print(f"Error loading county boundaries for {state}: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+def get_state_fips(state_abbrev):
+    """Convert state abbreviation to FIPS code"""
+    fips_map = {
+        'AL': '01', 'AK': '02', 'AZ': '04', 'AR': '05', 'CA': '06', 'CO': '08', 'CT': '09', 'DE': '10', 'FL': '12', 'GA': '13',
+        'HI': '15', 'ID': '16', 'IL': '17', 'IN': '18', 'IA': '19', 'KS': '20', 'KY': '21', 'LA': '22', 'ME': '23', 'MD': '24',
+        'MA': '25', 'MI': '26', 'MN': '27', 'MS': '28', 'MO': '29', 'MT': '30', 'NE': '31', 'NV': '32', 'NH': '33', 'NJ': '34',
+        'NM': '35', 'NY': '36', 'NC': '37', 'ND': '38', 'OH': '39', 'OK': '40', 'OR': '41', 'PA': '42', 'RI': '44', 'SC': '45',
+        'SD': '46', 'TN': '47', 'TX': '48', 'UT': '49', 'VT': '50', 'VA': '51', 'WA': '53', 'WV': '54', 'WI': '55', 'WY': '56'
+    }
+    return fips_map.get(state_abbrev.upper())
+
+def get_state_abbreviation(state_name):
+    """Convert full state name to abbreviation"""
+    state_map = {
+        'alabama': 'AL', 'alaska': 'AK', 'arizona': 'AZ', 'arkansas': 'AR', 'california': 'CA',
+        'colorado': 'CO', 'connecticut': 'CT', 'delaware': 'DE', 'florida': 'FL', 'georgia': 'GA',
+        'hawaii': 'HI', 'idaho': 'ID', 'illinois': 'IL', 'indiana': 'IN', 'iowa': 'IA',
+        'kansas': 'KS', 'kentucky': 'KY', 'louisiana': 'LA', 'maine': 'ME', 'maryland': 'MD',
+        'massachusetts': 'MA', 'michigan': 'MI', 'minnesota': 'MN', 'mississippi': 'MS',
+        'missouri': 'MO', 'montana': 'MT', 'nebraska': 'NE', 'nevada': 'NV', 'new hampshire': 'NH',
+        'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY', 'north carolina': 'NC',
+        'north dakota': 'ND', 'ohio': 'OH', 'oklahoma': 'OK', 'oregon': 'OR', 'pennsylvania': 'PA',
+        'rhode island': 'RI', 'south carolina': 'SC', 'south dakota': 'SD', 'tennessee': 'TN',
+        'texas': 'TX', 'utah': 'UT', 'vermont': 'VT', 'virginia': 'VA', 'washington': 'WA',
+        'west virginia': 'WV', 'wisconsin': 'WI', 'wyoming': 'WY'
+    }
+    return state_map.get(state_name.lower())
+
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -1111,12 +1451,17 @@ def health_check():
             cursor.execute('SELECT COUNT(*) as indexed_count FROM indexed_performance_active')
             indexed_count = cursor.fetchone()['indexed_count']
             
+            # Check county data
+            cursor.execute('SELECT COUNT(*) as county_count FROM county_timeseries')
+            county_count = cursor.fetchone()['county_count']
+            
             conn.close()
             return jsonify({
                 'status': 'ok', 
                 'database': True,
                 'total_cbsa': count,
-                'indexed_performance_records': indexed_count
+                'indexed_performance_records': indexed_count,
+                'county_records': county_count
             })
         except:
             if conn:
@@ -1124,6 +1469,130 @@ def health_check():
             return jsonify({'status': 'error', 'database': False})
     else:
         return jsonify({'status': 'error', 'database': False})
+
+@app.route('/api/indexed-performance/county/active/<county_fips>', methods=['GET'])
+def get_county_indexed_performance_active(county_fips):
+    """Get county active listings indexed performance vs national trends"""
+    return get_county_indexed_performance(county_fips, 'active_listing_count')
+
+@app.route('/api/indexed-performance/county/new-listings/<county_fips>', methods=['GET'])
+def get_county_indexed_performance_new_listings(county_fips):
+    """Get county new listings indexed performance vs national trends"""
+    return get_county_indexed_performance(county_fips, 'new_listing_count')
+
+@app.route('/api/indexed-performance/county/pending-sale/<county_fips>', methods=['GET'])
+def get_county_indexed_performance_pending_sale(county_fips):
+    """Get county pending sale indexed performance vs national trends"""
+    return get_county_indexed_performance(county_fips, 'pending_listing_count')
+
+@app.route('/api/indexed-performance/county/median-price/<county_fips>', methods=['GET'])
+def get_county_indexed_performance_median_price(county_fips):
+    """Get county median price indexed performance vs national trends"""
+    return get_county_indexed_performance(county_fips, 'median_listing_price')
+
+def get_county_indexed_performance(county_fips, metric):
+    """Get county indexed performance data for a specific metric"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database not found'}), 404
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Get indexed performance data for the county
+        table_name = f'indexed_performance_{metric}_counties'
+        cursor.execute(f'''
+            SELECT 
+                county_fips,
+                county_name,
+                month_date,
+                baseline_value,
+                baseline_date,
+                actual_value,
+                indexed_value,
+                performance_vs_index,
+                cumulative_national_return
+            FROM {table_name}
+            WHERE county_fips = ?
+            ORDER BY month_date
+        ''', (county_fips,))
+        
+        records = cursor.fetchall()
+        
+        if not records:
+            return jsonify({'error': f'No indexed performance data found for county {county_fips}'}), 404
+        
+        # Format data for Chart.js
+        labels = []
+        actual_data = []
+        indexed_data = []
+        
+        for record in records:
+            # Format date as 'YYYY-MM'
+            month_date = str(record['month_date'])
+            formatted_date = f"{month_date[:4]}-{month_date[4:6]}"
+            labels.append(formatted_date)
+            actual_data.append(record['actual_value'])
+            indexed_data.append(record['indexed_value'])
+        
+        # Calculate performance statistics
+        latest_record = records[-1]
+        performance_stats = {
+            'latest_actual': latest_record['actual_value'],
+            'latest_indexed': latest_record['indexed_value'], 
+            'latest_performance_vs_index': latest_record['performance_vs_index'],
+            'baseline_value': latest_record['baseline_value'],
+            'cumulative_national_return': latest_record['cumulative_national_return']
+        }
+        
+        # Determine color based on performance
+        performance = latest_record['performance_vs_index']
+        if performance >= 0.05:  # Outperforming by ≥5%
+            actual_color = '#22c55e'  # Green
+        elif performance <= -0.05:  # Underperforming by >5%
+            actual_color = '#ef4444'  # Red
+        else:  # Within ±5% of national trends
+            actual_color = '#eab308'  # Yellow
+        
+        chart_data = {
+            'labels': labels,
+            'datasets': [
+                {
+                    'label': f'Actual {metric.replace("_", " ").title()}',
+                    'data': actual_data,
+                    'borderColor': actual_color,
+                    'backgroundColor': actual_color.replace(')', ', 0.1)').replace('#', 'rgba(').replace('#22c55e', 'rgba(34, 197, 94').replace('#ef4444', 'rgba(239, 68, 68').replace('#eab308', 'rgba(234, 179, 8'),
+                    'tension': 0.1,
+                    'fill': True
+                },
+                {
+                    'label': 'National Trend Index',
+                    'data': indexed_data,
+                    'borderColor': '#64748B',
+                    'backgroundColor': 'rgba(100, 116, 139, 0.1)',
+                    'borderDash': [5, 5],
+                    'tension': 0.1,
+                    'fill': False
+                }
+            ]
+        }
+        
+        county_name = records[0]['county_name']
+        
+        conn.close()
+        return jsonify({
+            'county_fips': county_fips,
+            'county_name': county_name,
+            'metric': metric,
+            'data': chart_data,
+            'performance_stats': performance_stats,
+            'dateRange': f"{labels[0]}-{labels[-1]}"
+        })
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     print("Starting CBSA Coordinates API...")
@@ -1143,6 +1612,167 @@ if __name__ == '__main__':
     print("  GET /api/indexed-performance/state/median-price/<state_id> - Get state median price indexed performance")
     print("  GET /api/indexed-performance/state/new-listings/<state_id> - Get state new listings indexed performance")
     print("  GET /api/indexed-performance/state/pending-sale/<state_id> - Get state pending sale indexed performance")
+    print("  GET /api/counties/<state> - Get all counties for a state")
+    print("  GET /api/counties/<state>/boundaries - Get county boundaries for a state")
+    print("  GET /api/county/<county_fips> - Get latest data for a county")
+    print("  GET /api/county/<county_fips>/trends - Get 5-year county trends")
+    print("  GET /api/counties/search?q=query - Search counties by name/FIPS")
+    print("  GET /api/indexed-performance/county/active/<county_fips> - Get county active listings indexed performance")
+    print("  GET /api/indexed-performance/county/new-listings/<county_fips> - Get county new listings indexed performance")
+    print("  GET /api/indexed-performance/county/pending-sale/<county_fips> - Get county pending sale indexed performance")
+    print("  GET /api/indexed-performance/county/median-price/<county_fips> - Get county median price indexed performance")
     print("  GET /api/health - Health check with database stats")
+    print("  GET /api/trends/<level>/<identifier> - Get 5-year trend data (national/state/metro)")
+    print("  GET /api/trends/national-median-price - Get national median price trends")
+    print("  GET /api/trends/national-median-days - Get national median days trends")
+    print("  GET /api/county/<county_fips>/median-days-trends - Get county median days trends")
     print()
+
+@app.route('/api/trends/national-median-price', methods=['GET'])
+def get_national_median_price_trends():
+    """Get national median price time series data for beta calculations"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database not found'}), 404
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Get 5 years of national median price data
+        cursor.execute('''
+            SELECT median_listing_price 
+            FROM national_timeseries 
+            ORDER BY month_date ASC
+            LIMIT 61
+        ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        if not rows:
+            return jsonify({'error': 'No national median price data found'}), 404
+        
+        # Extract just the price values
+        data = [row['median_listing_price'] for row in rows if row['median_listing_price'] is not None]
+        
+        return jsonify({
+            'data': data,
+            'count': len(data)
+        })
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/trends/national-median-days', methods=['GET'])
+def get_national_median_days_trends():
+    """Get national median days time series data for beta calculations"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database not found'}), 404
+    
+    try:
+        cursor = conn.cursor()
+        
+        # Get 5 years of national median days data (most recent 61 months)
+        cursor.execute('''
+            SELECT median_days_on_market 
+            FROM national_timeseries 
+            ORDER BY month_date DESC
+            LIMIT 61
+        ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        if not rows:
+            return jsonify({'error': 'No national median days data found'}), 404
+        
+        # Extract just the days values and reverse to get chronological order (oldest to newest)
+        data = [row['median_days_on_market'] for row in rows if row['median_days_on_market'] is not None]
+        data.reverse()  # Reverse to get chronological order for beta calculation
+        
+        return jsonify({
+            'data': data,
+            'count': len(data)
+        })
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/county/<county_fips>/median-days-trends', methods=['GET'])
+def get_county_median_days_trends(county_fips):
+    """Get 5-year median days trend data for a specific county"""
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({'error': 'Database not found'}), 404
+    
+    try:
+        cursor = conn.cursor()
+        
+        # 5-year date range (July 2020 - July 2025)
+        start_date = 202007
+        end_date = 202507
+        
+        cursor.execute('''
+            SELECT month_date, median_days_on_market
+            FROM county_timeseries
+            WHERE county_fips = ? AND month_date BETWEEN ? AND ?
+            ORDER BY month_date
+        ''', (county_fips, start_date, end_date))
+        
+        data = cursor.fetchall()
+        conn.close()
+        
+        if not data:
+            return jsonify({'error': f'No median days data found for county {county_fips}'}), 404
+        
+        # Process data for Chart.js
+        labels = []
+        median_days_data = []
+        
+        for row in data:
+            month_date = row['month_date']
+            median_days = row['median_days_on_market']
+            
+            if median_days is not None:
+                # Convert YYYYMM to readable date
+                date_str = str(month_date)
+                year = date_str[:4]
+                month = date_str[4:]
+                labels.append(f"{year}-{month}")
+                median_days_data.append(median_days)
+        
+        result = {
+            'data': {
+                'labels': labels,
+                'datasets': [{
+                    'label': 'Median Days on Market',
+                    'data': median_days_data,
+                    'borderColor': '#ff6347',
+                    'backgroundColor': '#ff634720',
+                    'borderWidth': 2,
+                    'tension': 0.4,
+                    'pointBackgroundColor': '#ff6347',
+                    'pointBorderColor': '#ffffff',
+                    'pointBorderWidth': 1,
+                    'pointRadius': 3,
+                    'pointHoverRadius': 5
+                }]
+            },
+            'county_fips': county_fips,
+            'dateRange': f"{start_date}-{end_date}"
+        }
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        if conn:
+            conn.close()
+        return jsonify({'error': str(e)}), 500
+
+if __name__ == '__main__':
     app.run(debug=True, port=5001)

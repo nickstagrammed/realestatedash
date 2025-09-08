@@ -2046,6 +2046,158 @@ class RealEstateDashboard {
         if (typeof value !== 'number' || isNaN(value)) return 'N/A';
         return Math.round(value).toLocaleString();
     }
+
+    /**
+     * RELATIVE PERFORMANCE ANALYSIS SYSTEM
+     * 
+     * PURPOSE: Compare how individual markets perform vs national market trends
+     * 
+     * METHODOLOGY:
+     * 1. Each market (state/metro) uses its first period value as 100.0 baseline
+     * 2. National market uses its first period value as 100.0 baseline  
+     * 3. Both grow independently from their baselines
+     * 4. Compare relative performance: Market Index vs National Index
+     * 
+     * EXAMPLE - Alabama Active Listings:
+     * - Alabama Baseline (July 2020): 13,878 listings → 100.0 index
+     * - Alabama Current (July 2025): 20,698 listings → 149.1 index (+49% growth)
+     * - National Baseline (July 2020): 822,849 listings → 100.0 index
+     * - National Current (July 2025): 1,102,787 listings → 134.02 index (+34% growth)
+     * - RESULT: Alabama outperformed national by 15.08 points (149.1 - 134.02)
+     * 
+     * INTERPRETATION: Like stock performance vs S&P 500
+     * - Alabama "stock" grew 49% while "market" grew 34%
+     * - Alabama outperformed the market by 15 percentage points
+     * 
+     * USER SEES: "20,698 Active Listings" (actual count)
+     * CONTEXT: Alabama performed 15 points better than national average
+     */
+    
+    /**
+     * Calculate relative performance of a market vs national trends
+     * @param {number} currentValue - Current metric value for the market
+     * @param {number} baselineValue - Baseline metric value for the market
+     * @param {number} nationalCurrent - Current national metric value
+     * @param {number} nationalBaseline - Baseline national metric value
+     * @returns {Object} Performance analysis data
+     */
+    calculateRelativePerformance(currentValue, baselineValue, nationalCurrent, nationalBaseline) {
+        if (!currentValue || !baselineValue || !nationalCurrent || !nationalBaseline) {
+            return null;
+        }
+        
+        // Calculate market index (market performance vs its baseline)
+        const marketIndex = (currentValue / baselineValue) * 100;
+        
+        // Calculate national index (national performance vs its baseline)  
+        const nationalIndex = (nationalCurrent / nationalBaseline) * 100;
+        
+        // Calculate relative performance difference
+        const relativeDifference = marketIndex - nationalIndex;
+        
+        return {
+            marketIndex: Math.round(marketIndex * 10) / 10,
+            nationalIndex: Math.round(nationalIndex * 10) / 10,
+            relativeDifference: Math.round(relativeDifference * 10) / 10,
+            marketGrowth: Math.round((marketIndex - 100) * 10) / 10,
+            nationalGrowth: Math.round((nationalIndex - 100) * 10) / 10,
+            outperformed: relativeDifference > 0
+        };
+    }
+    
+    /**
+     * Get performance indicator for metric header
+     * @param {Object} locationData - Location data object
+     * @param {string} metric - Metric name (e.g., 'active_listing_count')
+     * @returns {string} Performance indicator (↗ or ↘ or ≈)
+     */
+    getPerformanceIndicator(locationData, metric) {
+        // For now, we'll use sample baselines - in production this would come from data
+        const sampleBaselines = {
+            'Alabama': { active_listing_count: 13878 },
+            'California': { active_listing_count: 180000 },
+            'Texas': { active_listing_count: 140000 }
+            // Add more as needed
+        };
+        
+        const locationName = locationData.state_id || locationData.metro_name || 'Unknown';
+        const baseline = sampleBaselines[locationName]?.[metric];
+        
+        if (!baseline) {
+            return ''; // No indicator if no baseline data
+        }
+        
+        const current = locationData[metric];
+        const nationalCurrent = 1102787; // Sample current national
+        const nationalBaseline = 822849; // National baseline
+        
+        const performance = this.calculateRelativePerformance(
+            current, baseline, nationalCurrent, nationalBaseline
+        );
+        
+        if (!performance) return '';
+        
+        if (performance.relativeDifference > 5) return '↗'; // Outperforming
+        if (performance.relativeDifference < -5) return '↘'; // Underperforming  
+        return '≈'; // Similar performance
+    }
+    
+    /**
+     * Get relative performance text for metric card
+     * @param {Object} locationData - Location data object
+     * @param {string} metric - Metric name
+     * @returns {string} Performance text (e.g., "+15.1")
+     */
+    getRelativePerformanceText(locationData, metric) {
+        // For now, we'll use sample baselines - in production this would come from data
+        const sampleBaselines = {
+            'Alabama': { active_listing_count: 13878 },
+            'California': { active_listing_count: 180000 },
+            'Texas': { active_listing_count: 140000 }
+        };
+        
+        const locationName = locationData.state_id || locationData.metro_name || 'Unknown';
+        const baseline = sampleBaselines[locationName]?.[metric];
+        
+        if (!baseline) {
+            return 'vs Nat\'l';
+        }
+        
+        const current = locationData[metric];
+        const nationalCurrent = 1102787; // Sample current national
+        const nationalBaseline = 822849; // National baseline
+        
+        const performance = this.calculateRelativePerformance(
+            current, baseline, nationalCurrent, nationalBaseline
+        );
+        
+        if (!performance) return 'vs Nat\'l';
+        
+        const diff = performance.relativeDifference;
+        const sign = diff > 0 ? '+' : '';
+        return `${sign}${diff}`;
+    }
+    
+    /**
+     * Format Active Listings using National Index (100.0 baseline)
+     * NOTE: This function is kept for compatibility but main display shows raw values
+     * @param {number} rawValue - The raw active listing count
+     * @returns {string} Formatted indexed value (e.g., "94.7")
+     */
+    formatActiveListingsIndex(rawValue) {
+        if (typeof rawValue !== 'number' || isNaN(rawValue) || rawValue <= 0) {
+            return 'N/A';
+        }
+
+        // National baseline for Active Listings (July 2020)
+        const NATIONAL_BASELINE = 822849;
+        
+        // Calculate the indexed value
+        const indexedValue = (rawValue / NATIONAL_BASELINE) * 100;
+        
+        // Format to 1 decimal place
+        return indexedValue.toFixed(1);
+    }
     
     formatBeta(value) {
         if (typeof value !== 'number' || isNaN(value)) return 'N/A';
@@ -2649,7 +2801,26 @@ class RealEstateDashboard {
                             label: function(context) {
                                 const value = context.parsed.y;
                                 const label = context.dataset.label;
-                                return `${label}: ${Math.round(value).toLocaleString()}`;
+                                
+                                // Show clean National Index values instead of confusing internal calculations
+                                if (label.includes('Index')) {
+                                    const baseline = context.chart.data.datasets[1].data[0]; // First indexed value
+                                    const indexValue = ((value / baseline) * 100).toFixed(1);
+                                    
+                                    // Determine the metric type from the label
+                                    let metricType = 'Active';
+                                    if (label.includes('Median Price') || label.includes('Price')) {
+                                        metricType = 'Median Price';
+                                    } else if (label.includes('New')) {
+                                        metricType = 'New Listings';
+                                    } else if (label.includes('Pending')) {
+                                        metricType = 'Pending Sale';
+                                    }
+                                    
+                                    return `National ${metricType} Index: ${indexValue}`;
+                                } else {
+                                    return `${label}: ${Math.round(value).toLocaleString()}`;
+                                }
                             },
                             afterBody: function(tooltipItems) {
                                 if (tooltipItems.length === 2) {
@@ -2943,7 +3114,27 @@ class RealEstateDashboard {
                         callbacks: {
                             label: function(context) {
                                 const value = context.parsed.y;
-                                return `${context.dataset.label}: ${Math.round(value).toLocaleString()}`;
+                                const label = context.dataset.label;
+                                
+                                // Show clean National Index values instead of confusing internal calculations
+                                if (label.includes('Index')) {
+                                    const baseline = context.chart.data.datasets[1].data[0]; // First indexed value
+                                    const indexValue = ((value / baseline) * 100).toFixed(1);
+                                    
+                                    // Determine the metric type from the label
+                                    let metricType = 'Active';
+                                    if (label.includes('Median Price') || label.includes('Price')) {
+                                        metricType = 'Median Price';
+                                    } else if (label.includes('New')) {
+                                        metricType = 'New Listings';
+                                    } else if (label.includes('Pending')) {
+                                        metricType = 'Pending Sale';
+                                    }
+                                    
+                                    return `National ${metricType} Index: ${indexValue}`;
+                                } else {
+                                    return `${label}: ${Math.round(value).toLocaleString()}`;
+                                }
                             },
                             title: function(context) {
                                 return context[0].label;
@@ -3129,7 +3320,26 @@ class RealEstateDashboard {
                             label: function(context) {
                                 const value = context.parsed.y;
                                 const label = context.dataset.label;
-                                return `${label}: ${Math.round(value).toLocaleString()}`;
+                                
+                                // Show clean National Index values instead of confusing internal calculations
+                                if (label.includes('Index')) {
+                                    const baseline = context.chart.data.datasets[1].data[0]; // First indexed value
+                                    const indexValue = ((value / baseline) * 100).toFixed(1);
+                                    
+                                    // Determine the metric type from the label
+                                    let metricType = 'Active';
+                                    if (label.includes('Median Price') || label.includes('Price')) {
+                                        metricType = 'Median Price';
+                                    } else if (label.includes('New')) {
+                                        metricType = 'New Listings';
+                                    } else if (label.includes('Pending')) {
+                                        metricType = 'Pending Sale';
+                                    }
+                                    
+                                    return `National ${metricType} Index: ${indexValue}`;
+                                } else {
+                                    return `${label}: ${Math.round(value).toLocaleString()}`;
+                                }
                             },
                             afterBody: function(tooltipItems) {
                                 if (tooltipItems.length === 2) {
