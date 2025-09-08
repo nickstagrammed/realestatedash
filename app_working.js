@@ -3506,6 +3506,149 @@ class RealEstateDashboard {
             `;
         }
     }
+
+    /**
+     * Calculate National Index for time series data
+     * Creates a cumulative index starting at 100.0 from the first period
+     * 
+     * @param {Array} timeSeriesData - Array of objects with period and value
+     * @param {string} valueField - Field name containing the numeric values
+     * @param {string} periodField - Field name containing the time period (e.g., 'month_date')
+     * @returns {Array} Array of objects with original data plus index_value
+     */
+    calculateNationalIndex(timeSeriesData, valueField = 'value', periodField = 'period') {
+        if (!timeSeriesData || timeSeriesData.length === 0) {
+            console.warn('calculateNationalIndex: No data provided');
+            return [];
+        }
+
+        // Sort data by period to ensure chronological order
+        const sortedData = [...timeSeriesData].sort((a, b) => {
+            return parseInt(a[periodField]) - parseInt(b[periodField]);
+        });
+
+        // Get baseline value from first period
+        const baselineValue = sortedData[0][valueField];
+        if (!baselineValue || baselineValue <= 0) {
+            console.warn('calculateNationalIndex: Invalid baseline value:', baselineValue);
+            return sortedData.map(item => ({ ...item, index_value: null }));
+        }
+
+        let previousIndexValue = 100.0; // Start at 100.0 for baseline
+        
+        return sortedData.map((item, index) => {
+            const currentValue = item[valueField];
+            
+            if (index === 0) {
+                // First period is always 100.0
+                return {
+                    ...item,
+                    index_value: 100.0,
+                    baseline_value: baselineValue,
+                    is_baseline: true
+                };
+            } else {
+                // Calculate period-over-period change
+                const previousValue = sortedData[index - 1][valueField];
+                
+                if (!currentValue || !previousValue || previousValue <= 0) {
+                    return { 
+                        ...item, 
+                        index_value: null,
+                        baseline_value: baselineValue,
+                        is_baseline: false
+                    };
+                }
+                
+                // Apply the change to previous index value
+                const periodChange = (currentValue / previousValue) - 1;
+                const currentIndexValue = previousIndexValue * (1 + periodChange);
+                
+                previousIndexValue = currentIndexValue;
+                
+                return {
+                    ...item,
+                    index_value: Math.round(currentIndexValue * 10) / 10, // Round to 1 decimal
+                    baseline_value: baselineValue,
+                    is_baseline: false,
+                    period_change_pct: Math.round(periodChange * 1000) / 10 // Round to 1 decimal
+                };
+            }
+        });
+    }
+
+    /**
+     * Format index value for display
+     * @param {number} indexValue - The index value to format
+     * @param {boolean} includeBaseline - Whether to include " (Baseline)" for 100.0
+     * @returns {string} Formatted string
+     */
+    formatIndexValue(indexValue, includeBaseline = false) {
+        if (indexValue === null || indexValue === undefined) {
+            return 'N/A';
+        }
+        
+        const formatted = indexValue.toFixed(1);
+        if (indexValue === 100.0 && includeBaseline) {
+            return `${formatted} (Baseline)`;
+        }
+        return formatted;
+    }
+
+    /**
+     * Get national index data for Active Listings
+     * This will be expanded to work with API data in the future
+     * @returns {Promise<Array>} Array of indexed national data
+     */
+    async getNationalIndexData(metric = 'active_listing_count') {
+        try {
+            // For now, return sample data structure
+            // In the future, this will fetch from API: /api/national-index/${metric}
+            const sampleData = [
+                { month_date: 202007, active_listing_count: 822849 },
+                { month_date: 202008, active_listing_count: 779567 },
+                { month_date: 202009, active_listing_count: 749403 },
+                // More data would come from API call
+            ];
+            
+            return this.calculateNationalIndex(sampleData, metric, 'month_date');
+        } catch (error) {
+            console.error('Failed to get national index data:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Test the national index calculation with sample data
+     * This will verify our logic works correctly
+     */
+    testNationalIndex() {
+        console.log('=== Testing National Index Calculation ===');
+        
+        const sampleData = [
+            { month_date: 202007, active_listing_count: 822849 },
+            { month_date: 202008, active_listing_count: 779567 },
+            { month_date: 202009, active_listing_count: 749403 },
+            { month_date: 202010, active_listing_count: 720000 } // Example fourth period
+        ];
+        
+        const indexedData = this.calculateNationalIndex(sampleData, 'active_listing_count', 'month_date');
+        
+        console.log('Original Data vs Indexed Values:');
+        indexedData.forEach((item, i) => {
+            const periodChange = item.period_change_pct ? `(${item.period_change_pct > 0 ? '+' : ''}${item.period_change_pct}%)` : '';
+            console.log(`${item.month_date}: ${item.active_listing_count.toLocaleString()} → Index: ${this.formatIndexValue(item.index_value)} ${periodChange}`);
+        });
+        
+        // Manual verification of calculations
+        console.log('\nManual Verification:');
+        console.log('Period 1 (202007): 822,849 → 100.0 (baseline)');
+        console.log('Period 2 (202008): 779,567 → 94.7 (779567/822849*100)');
+        console.log('Period 3 (202009): 749,403 → 91.0 (94.7 * (749403/779567))');
+        console.log('Period 4 (202010): 720,000 → 87.1 (91.0 * (720000/749403))');
+        
+        return indexedData;
+    }
 }
 
 // Initialize when DOM is ready
