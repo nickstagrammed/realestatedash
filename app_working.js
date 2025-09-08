@@ -267,10 +267,15 @@ class RealEstateDashboard {
         // Reset county view state
         this.currentDrilledState = null;
         
-        // Clear any selected layers
+        // Clear any selected layers and their highlights
         this.selectedCountyLayer = null;
         this.selectedStateLayer = null;
-        this.selectedMetroMarker = null;
+        
+        // Clear metro marker highlight if one is selected
+        if (this.selectedMetroMarker) {
+            this.highlightMarker(this.selectedMetroMarker, false);
+            this.selectedMetroMarker = null;
+        }
         
         // Hide breadcrumb and close button
         this.updateBreadcrumb('national');

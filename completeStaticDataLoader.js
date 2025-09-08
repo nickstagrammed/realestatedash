@@ -242,22 +242,182 @@ class CompleteStaticDataLoader {
      * Simulate /api/median-days/metro/{cbsaCode} endpoint
      */
     async getMetroMedianDays(cbsaCode) {
-        const data = await this.getMetroTimeseries(cbsaCode);
-        return data.map(record => ({
+        const metroData = await this.getMetroTimeseries(cbsaCode);
+        const nationalData = await this.getNationalTimeseries();
+        
+        const metroMedianDays = metroData.map(record => ({
             month_date: record.month_date,
             median_days_on_market: record.median_days_on_market
         })).filter(record => record.median_days_on_market != null);
+        
+        const nationalMedianDays = nationalData.map(record => ({
+            month_date: record.month_date,
+            median_days_on_market: record.median_days_on_market
+        })).filter(record => record.median_days_on_market != null);
+        
+        // Create lookup for national data
+        const nationalLookup = {};
+        nationalMedianDays.forEach(record => {
+            nationalLookup[record.month_date] = record.median_days_on_market;
+        });
+        
+        // Format chart data
+        const labels = [];
+        const metroValues = [];
+        const nationalValues = [];
+        
+        metroMedianDays.forEach(record => {
+            const monthStr = record.month_date.toString();
+            const year = monthStr.substring(0, 4);
+            const month = monthStr.substring(4, 6);
+            const label = `${year}-${month}`;
+            
+            const nationalValue = nationalLookup[record.month_date];
+            if (nationalValue != null) {
+                labels.push(label);
+                metroValues.push(record.median_days_on_market);
+                nationalValues.push(nationalValue);
+            }
+        });
+        
+        // Calculate stats
+        const latestMetro = metroValues[metroValues.length - 1];
+        const latestNational = nationalValues[nationalValues.length - 1];
+        const difference = latestMetro - latestNational;
+        
+        // Determine metro line color based on performance
+        let metroColor;
+        if (difference <= -10) {
+            metroColor = '#00bfff'; // Very Fast - Light Blue
+        } else if (difference <= -5) {
+            metroColor = '#40e0d0'; // Fast - Turquoise
+        } else if (Math.abs(difference) <= 5) {
+            metroColor = '#ffd700'; // Average - Gold
+        } else if (difference <= 15) {
+            metroColor = '#ff6347'; // Slow - Tomato
+        } else {
+            metroColor = '#ff1493'; // Very Slow - Hot Pink
+        }
+        
+        return {
+            cbsa_code: cbsaCode.toString(),
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Metro Median Days',
+                        data: metroValues,
+                        borderColor: metroColor,
+                        backgroundColor: metroColor + '20', // Add transparency
+                        tension: 0.1
+                    },
+                    {
+                        label: 'National Median Days',
+                        data: nationalValues,
+                        borderColor: '#64748B',
+                        backgroundColor: 'rgba(100, 116, 139, 0.1)',
+                        tension: 0.1,
+                        borderDash: [5, 5]
+                    }
+                ]
+            },
+            stats: {
+                latest_metro: latestMetro,
+                latest_national: latestNational,
+                difference: difference
+            }
+        };
     }
 
     /**
      * Simulate /api/median-days/state/{stateId} endpoint
      */
     async getStateMedianDays(stateId) {
-        const data = await this.getStateTimeseries(stateId);
-        return data.map(record => ({
+        const stateData = await this.getStateTimeseries(stateId);
+        const nationalData = await this.getNationalTimeseries();
+        
+        const stateMedianDays = stateData.map(record => ({
             month_date: record.month_date,
             median_days_on_market: record.median_days_on_market
         })).filter(record => record.median_days_on_market != null);
+        
+        const nationalMedianDays = nationalData.map(record => ({
+            month_date: record.month_date,
+            median_days_on_market: record.median_days_on_market
+        })).filter(record => record.median_days_on_market != null);
+        
+        // Create lookup for national data
+        const nationalLookup = {};
+        nationalMedianDays.forEach(record => {
+            nationalLookup[record.month_date] = record.median_days_on_market;
+        });
+        
+        // Format chart data
+        const labels = [];
+        const stateValues = [];
+        const nationalValues = [];
+        
+        stateMedianDays.forEach(record => {
+            const monthStr = record.month_date.toString();
+            const year = monthStr.substring(0, 4);
+            const month = monthStr.substring(4, 6);
+            const label = `${year}-${month}`;
+            
+            const nationalValue = nationalLookup[record.month_date];
+            if (nationalValue != null) {
+                labels.push(label);
+                stateValues.push(record.median_days_on_market);
+                nationalValues.push(nationalValue);
+            }
+        });
+        
+        // Calculate stats
+        const latestState = stateValues[stateValues.length - 1];
+        const latestNational = nationalValues[nationalValues.length - 1];
+        const difference = latestState - latestNational;
+        
+        // Determine state line color based on performance
+        let stateColor;
+        if (difference <= -10) {
+            stateColor = '#00bfff'; // Very Fast - Light Blue
+        } else if (difference <= -5) {
+            stateColor = '#40e0d0'; // Fast - Turquoise
+        } else if (Math.abs(difference) <= 5) {
+            stateColor = '#ffd700'; // Average - Gold
+        } else if (difference <= 15) {
+            stateColor = '#ff6347'; // Slow - Tomato
+        } else {
+            stateColor = '#ff1493'; // Very Slow - Hot Pink
+        }
+        
+        return {
+            state_id: stateId,
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'State Median Days',
+                        data: stateValues,
+                        borderColor: stateColor,
+                        backgroundColor: stateColor + '20', // Add transparency
+                        tension: 0.1
+                    },
+                    {
+                        label: 'National Median Days',
+                        data: nationalValues,
+                        borderColor: '#64748B',
+                        backgroundColor: 'rgba(100, 116, 139, 0.1)',
+                        tension: 0.1,
+                        borderDash: [5, 5]
+                    }
+                ]
+            },
+            stats: {
+                latest_state: latestState,
+                latest_national: latestNational,
+                difference: difference
+            }
+        };
     }
 
     /**

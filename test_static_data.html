@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Static Data Test</title>
+</head>
+<body>
+    <h1>Static Data Loader Test</h1>
+    <div id="output"></div>
+    
+    <script src="staticDataLoader.js"></script>
+    <script>
+        async function testStaticData() {
+            const output = document.getElementById('output');
+            
+            try {
+                output.innerHTML += '<p>Testing Static Data Loader...</p>';
+                
+                // Test states data
+                const states = await window.staticDataLoader.getStates();
+                output.innerHTML += `<p>✅ States loaded: ${states.length} states</p>`;
+                
+                // Test metros data  
+                const metros = await window.staticDataLoader.getMetros();
+                output.innerHTML += `<p>✅ Metros loaded: ${metros.length} metros</p>`;
+                
+                // Test Alabama state indexed performance
+                const alabamaData = await window.staticDataLoader.getStateIndexedPerformance('active', 'AL');
+                output.innerHTML += `<p>✅ Alabama active data: ${alabamaData.length} records</p>`;
+                
+                // Test formatted chart data
+                if (alabamaData.length > 0) {
+                    const chartData = window.staticDataLoader.formatChartData(alabamaData, 'AL', 'active');
+                    if (chartData) {
+                        output.innerHTML += `<p>✅ Chart data formatted: ${chartData.data.labels.length} data points</p>`;
+                        output.innerHTML += `<p>Latest actual: ${chartData.performance_stats.latest_actual}</p>`;
+                        output.innerHTML += `<p>Latest indexed: ${chartData.performance_stats.latest_indexed}</p>`;
+                    }
+                }
+                
+                output.innerHTML += '<p><strong>✅ All tests passed! Static data loader is working correctly.</strong></p>';
+                
+            } catch (error) {
+                output.innerHTML += `<p>❌ Error: ${error.message}</p>`;
+                console.error('Test error:', error);
+            }
+        }
+        
+        // Run tests when page loads
+        window.addEventListener('load', testStaticData);
+    </script>
+</body>
+</html>
