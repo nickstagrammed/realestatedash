@@ -107,7 +107,37 @@ class RealEstateDashboard {
         
         this.map.getContainer().style.background = '#000000';
         
+        // Add double-click handler to return to national view
+        this.map.on('dblclick', () => {
+            this.returnToNationalView();
+        });
+        
         // Remove the problematic global click handler - we'll handle clicks per layer
+    }
+    
+    // Method to return to national view and clear selected state
+    returnToNationalView() {
+        // Clear selected state styling
+        if (this.selectedStateLayer) {
+            this.selectedStateLayer.setStyle({
+                fillColor: 'transparent',
+                fillOpacity: 0,
+                weight: 2,
+                color: '#ffffff'
+            });
+            this.selectedStateLayer = null;
+        }
+        
+        // Return to national bounds with animation
+        this.map.setView([39.50, -98.35], 4, {
+            animate: true,
+            duration: 1.0
+        });
+        
+        // Clear sidebar details
+        this.restoreDefaultSidebar();
+        
+        console.log('Returned to national view');
     }
     
     setupViewSelector() {
@@ -268,7 +298,16 @@ class RealEstateDashboard {
                             color: '#ffffff'
                         });
                         
-                        console.log(`State clicked: ${stateName}`);
+                        // Snap to state bounds with smooth animation
+                        const bounds = layer.getBounds();
+                        this.map.fitBounds(bounds, {
+                            padding: [20, 20], // Add some padding around the state
+                            maxZoom: 6, // Don't zoom in too much for large states
+                            animate: true,
+                            duration: 1.0 // 1 second animation
+                        });
+                        
+                        console.log(`State clicked: ${stateName} - snapping to bounds`);
                         this.showDetailPanel(stateName, stateData);
                         // this.loadTrendChart('state', stateName); // Disabled 5-year trends
                     }
