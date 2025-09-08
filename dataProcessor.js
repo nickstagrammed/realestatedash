@@ -154,7 +154,8 @@ class DataProcessor {
             'active_listing_count',
             'new_listing_count', 
             'pending_listing_count',
-            'median_listing_price'
+            'median_listing_price',
+            'median_days_on_market'
         ];
         
         const result = {
@@ -185,7 +186,8 @@ class DataProcessor {
             'active_listing_count',
             'new_listing_count', 
             'pending_listing_count',
-            'median_listing_price'
+            'median_listing_price',
+            'median_days_on_market'
         ];
         
         const result = {
@@ -427,6 +429,10 @@ class DataProcessor {
                 median_listing_price_beta_3y: stateInfo.betas?.median_listing_price?.beta_3y || 0,
                 median_listing_price_beta_1y: stateInfo.betas?.median_listing_price?.beta_1y || 0,
                 
+                median_days_on_market_beta_5y: stateInfo.betas?.median_days_on_market?.beta_5y || 0,
+                median_days_on_market_beta_3y: stateInfo.betas?.median_days_on_market?.beta_3y || 0,
+                median_days_on_market_beta_1y: stateInfo.betas?.median_days_on_market?.beta_1y || 0,
+                
                 // Add state identifier
                 state_id: latest.state_id || state,
                 last_updated: latest.month_date_yyyymm
@@ -490,6 +496,10 @@ class DataProcessor {
                 median_listing_price_beta_5y: metroInfo.betas?.median_listing_price?.beta_5y || 0,
                 median_listing_price_beta_3y: metroInfo.betas?.median_listing_price?.beta_3y || 0,
                 median_listing_price_beta_1y: metroInfo.betas?.median_listing_price?.beta_1y || 0,
+                
+                median_days_on_market_beta_5y: metroInfo.betas?.median_days_on_market?.beta_5y || 0,
+                median_days_on_market_beta_3y: metroInfo.betas?.median_days_on_market?.beta_3y || 0,
+                median_days_on_market_beta_1y: metroInfo.betas?.median_days_on_market?.beta_1y || 0,
                 
                 // Add metro identifier
                 metro_id: latest.cbsa_code || latest.metro_id || metro.substring(0, 3).toUpperCase(),
