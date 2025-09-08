@@ -14,11 +14,72 @@ class RealEstateDashboard {
         this.stateBoundaries = null;
         this.countyBoundaries = null;
         this.currentDrilledState = null;
-        this.currentDrillLevel = 'national'; // Track drill level: 'national', 'state', 'county'
+        this.currentDrillLevel = 'national'; // Track drill level: 'national', 'regional', 'state', 'county'
         this.selectedStateLayer = null;
+        this.selectedMetroMarker = null;
         this.closeButton = null;
         this.backButton = null;
+        this.currentRegionalBounds = null;
+        this.regionalDefinitions = this.defineRegions();
         this.init();
+    }
+    
+    defineRegions() {
+        // Regional zoom definitions - expand view to include neighboring states
+        // Special handling for Alaska and Hawaii - they go directly to national
+        return {
+            'Alabama': { bounds: [[30.2, -88.5], [35.0, -84.9]], neighbors: ['Georgia', 'Tennessee', 'Mississippi', 'Florida'] },
+            'Arizona': { bounds: [[31.3, -114.8], [37.0, -109.0]], neighbors: ['New Mexico', 'Utah', 'Nevada', 'California', 'Colorado'] },
+            'Arkansas': { bounds: [[33.0, -94.6], [36.5, -89.6]], neighbors: ['Missouri', 'Tennessee', 'Mississippi', 'Louisiana', 'Texas', 'Oklahoma'] },
+            'California': { bounds: [[32.5, -124.5], [42.0, -114.1]], neighbors: ['Oregon', 'Nevada', 'Arizona'] },
+            'Colorado': { bounds: [[37.0, -109.1], [41.0, -102.0]], neighbors: ['Wyoming', 'Nebraska', 'Kansas', 'Oklahoma', 'New Mexico', 'Utah'] },
+            'Connecticut': { bounds: [[40.9, -73.8], [42.1, -71.8]], neighbors: ['Massachusetts', 'Rhode Island', 'New York'] },
+            'Delaware': { bounds: [[38.4, -75.8], [39.8, -75.0]], neighbors: ['Maryland', 'Pennsylvania', 'New Jersey'] },
+            'Florida': { bounds: [[24.4, -87.6], [31.0, -80.0]], neighbors: ['Georgia', 'Alabama'] },
+            'Georgia': { bounds: [[30.4, -85.6], [35.0, -80.8]], neighbors: ['Florida', 'Alabama', 'Tennessee', 'North Carolina', 'South Carolina'] },
+            'Idaho': { bounds: [[42.0, -117.2], [49.0, -111.0]], neighbors: ['Washington', 'Oregon', 'Nevada', 'Utah', 'Wyoming', 'Montana'] },
+            'Illinois': { bounds: [[37.0, -91.5], [42.5, -87.0]], neighbors: ['Wisconsin', 'Indiana', 'Iowa', 'Missouri', 'Kentucky'] },
+            'Indiana': { bounds: [[37.8, -88.1], [41.8, -84.8]], neighbors: ['Illinois', 'Kentucky', 'Ohio', 'Michigan'] },
+            'Iowa': { bounds: [[40.4, -96.6], [43.5, -90.1]], neighbors: ['Minnesota', 'Wisconsin', 'Illinois', 'Missouri', 'Kansas', 'Nebraska', 'South Dakota'] },
+            'Kansas': { bounds: [[37.0, -102.1], [40.0, -94.6]], neighbors: ['Nebraska', 'Missouri', 'Oklahoma', 'Colorado'] },
+            'Kentucky': { bounds: [[36.5, -89.6], [39.1, -82.0]], neighbors: ['Illinois', 'Indiana', 'Ohio', 'West Virginia', 'Virginia', 'Tennessee', 'Missouri'] },
+            'Louisiana': { bounds: [[28.9, -94.0], [33.0, -88.8]], neighbors: ['Texas', 'Arkansas', 'Mississippi'] },
+            'Maine': { bounds: [[43.1, -71.1], [47.5, -66.9]], neighbors: ['New Hampshire'] },
+            'Maryland': { bounds: [[37.9, -79.5], [39.7, -75.0]], neighbors: ['Pennsylvania', 'West Virginia', 'Virginia', 'Delaware'] },
+            'Massachusetts': { bounds: [[41.2, -73.5], [42.9, -69.9]], neighbors: ['Rhode Island', 'Connecticut', 'New York', 'Vermont', 'New Hampshire'] },
+            'Michigan': { bounds: [[41.7, -90.4], [48.3, -82.1]], neighbors: ['Ohio', 'Indiana', 'Illinois', 'Wisconsin', 'Minnesota'] },
+            'Minnesota': { bounds: [[43.5, -97.2], [49.4, -89.5]], neighbors: ['Iowa', 'Wisconsin', 'Michigan', 'North Dakota', 'South Dakota'] },
+            'Mississippi': { bounds: [[30.2, -91.7], [35.0, -88.1]], neighbors: ['Louisiana', 'Arkansas', 'Tennessee', 'Alabama'] },
+            'Missouri': { bounds: [[36.0, -95.8], [40.6, -89.1]], neighbors: ['Iowa', 'Illinois', 'Kentucky', 'Tennessee', 'Arkansas', 'Oklahoma', 'Kansas', 'Nebraska'] },
+            'Montana': { bounds: [[45.0, -116.1], [49.0, -104.0]], neighbors: ['Idaho', 'Wyoming', 'South Dakota', 'North Dakota'] },
+            'Nebraska': { bounds: [[40.0, -104.1], [43.0, -95.3]], neighbors: ['South Dakota', 'Iowa', 'Missouri', 'Kansas', 'Colorado', 'Wyoming'] },
+            'Nevada': { bounds: [[35.0, -120.0], [42.0, -114.0]], neighbors: ['California', 'Oregon', 'Idaho', 'Utah', 'Arizona'] },
+            'New Hampshire': { bounds: [[42.7, -72.6], [45.3, -70.6]], neighbors: ['Maine', 'Massachusetts', 'Vermont'] },
+            'New Jersey': { bounds: [[38.9, -75.6], [41.4, -73.9]], neighbors: ['New York', 'Pennsylvania', 'Delaware'] },
+            'New Mexico': { bounds: [[31.3, -109.1], [37.0, -103.0]], neighbors: ['Arizona', 'Utah', 'Colorado', 'Oklahoma', 'Texas'] },
+            'New York': { bounds: [[40.5, -79.8], [45.0, -71.9]], neighbors: ['Pennsylvania', 'New Jersey', 'Connecticut', 'Massachusetts', 'Vermont'] },
+            'North Carolina': { bounds: [[33.8, -84.3], [36.6, -75.5]], neighbors: ['Virginia', 'Tennessee', 'Georgia', 'South Carolina'] },
+            'North Dakota': { bounds: [[45.9, -104.1], [49.0, -96.6]], neighbors: ['Montana', 'South Dakota', 'Minnesota'] },
+            'Ohio': { bounds: [[38.4, -84.8], [42.3, -80.5]], neighbors: ['Michigan', 'Pennsylvania', 'West Virginia', 'Kentucky', 'Indiana'] },
+            'Oklahoma': { bounds: [[33.6, -103.0], [37.0, -94.4]], neighbors: ['Kansas', 'Missouri', 'Arkansas', 'Texas', 'New Mexico', 'Colorado'] },
+            'Oregon': { bounds: [[42.0, -124.6], [46.3, -116.5]], neighbors: ['Washington', 'Idaho', 'Nevada', 'California'] },
+            'Pennsylvania': { bounds: [[39.7, -80.5], [42.3, -75.0]], neighbors: ['New York', 'New Jersey', 'Delaware', 'Maryland', 'West Virginia', 'Ohio'] },
+            'Rhode Island': { bounds: [[41.1, -71.9], [42.0, -71.1]], neighbors: ['Connecticut', 'Massachusetts'] },
+            'South Carolina': { bounds: [[32.0, -83.4], [35.2, -78.5]], neighbors: ['North Carolina', 'Georgia'] },
+            'South Dakota': { bounds: [[42.5, -104.1], [45.9, -96.4]], neighbors: ['North Dakota', 'Minnesota', 'Iowa', 'Nebraska', 'Wyoming', 'Montana'] },
+            'Tennessee': { bounds: [[35.0, -90.3], [36.7, -81.6]], neighbors: ['Kentucky', 'Virginia', 'North Carolina', 'Georgia', 'Alabama', 'Mississippi', 'Arkansas', 'Missouri'] },
+            'Texas': { bounds: [[25.8, -106.6], [36.5, -93.5]], neighbors: ['New Mexico', 'Oklahoma', 'Arkansas', 'Louisiana'] },
+            'Utah': { bounds: [[37.0, -114.1], [42.0, -109.0]], neighbors: ['Idaho', 'Wyoming', 'Colorado', 'Arizona', 'Nevada'] },
+            'Vermont': { bounds: [[42.7, -73.4], [45.0, -71.5]], neighbors: ['New York', 'New Hampshire', 'Massachusetts'] },
+            'Virginia': { bounds: [[36.5, -83.7], [39.5, -75.2]], neighbors: ['Maryland', 'West Virginia', 'Kentucky', 'Tennessee', 'North Carolina'] },
+            'Washington': { bounds: [[45.5, -124.8], [49.0, -116.9]], neighbors: ['Oregon', 'Idaho'] },
+            'West Virginia': { bounds: [[37.2, -82.6], [40.6, -77.7]], neighbors: ['Pennsylvania', 'Maryland', 'Virginia', 'Kentucky', 'Ohio'] },
+            'Wisconsin': { bounds: [[42.5, -92.9], [47.3, -86.2]], neighbors: ['Minnesota', 'Iowa', 'Illinois', 'Michigan'] },
+            'Wyoming': { bounds: [[41.0, -111.1], [45.0, -104.0]], neighbors: ['Montana', 'South Dakota', 'Nebraska', 'Colorado', 'Utah', 'Idaho'] },
+            // Special cases - Alaska and Hawaii go directly to national
+            'Alaska': null,
+            'Hawaii': null
+        };
     }
     
     async init() {
@@ -71,6 +132,7 @@ class RealEstateDashboard {
         }
         
         this.backButton = document.getElementById('backButton');
+        this.backLabel = document.getElementById('backLabel');
         if (this.backButton) {
             this.backButton.addEventListener('click', () => {
                 this.returnToPreviousLevel();
@@ -208,6 +270,7 @@ class RealEstateDashboard {
         // Clear any selected layers
         this.selectedCountyLayer = null;
         this.selectedStateLayer = null;
+        this.selectedMetroMarker = null;
         
         // Hide breadcrumb and close button
         this.updateBreadcrumb('national');
@@ -427,6 +490,28 @@ class RealEstateDashboard {
                 click: (e) => {
                     e.originalEvent.stopPropagation();
                     console.log(`Metro clicked: ${csvMetroName}`);
+                    
+                    // Clear previous selection
+                    if (this.selectedMetroMarker) {
+                        this.highlightMarker(this.selectedMetroMarker, false);
+                    }
+                    
+                    // Set new selection
+                    this.selectedMetroMarker = marker;
+                    this.highlightMarker(marker, true);
+                    
+                    // Snap to metro location with smooth animation
+                    this.map.setView(coords, 8, {
+                        animate: true,
+                        pan: {
+                            duration: 1.0
+                        },
+                        zoom: {
+                            duration: 1.0
+                        }
+                    });
+                    
+                    console.log(`Metro snapped to view: ${csvMetroName} at ${coords}`);
                     this.showDetailPanel(csvMetroName, metroData);
                     // For metros, we need to get the CBSA code from the metro data
                     const cbsaCode = metroData.cbsa_code || csvMetroName;
@@ -932,7 +1017,7 @@ class RealEstateDashboard {
     }
     
     async showStateCounties(stateName) {
-        console.log(`Loading counties for ${stateName}...`);
+        console.log(`Loading counties for ${stateName} with regional navigation...`);
         
         // Show loading indicator
         const dataInfo = document.getElementById('dataInfo');
@@ -960,6 +1045,17 @@ class RealEstateDashboard {
             return;
         }
         
+        // Load state boundaries for regional navigation
+        if (!this.stateBoundaries) {
+            try {
+                const response = await fetch('./state_boundaries.json');
+                if (response.ok) {
+                    this.stateBoundaries = await response.json();
+                }
+            } catch (error) {
+                console.warn('Could not load state boundaries for regional navigation:', error);
+            }
+        }
         
         // Clear current layer
         if (this.currentLayer) {
@@ -968,10 +1064,11 @@ class RealEstateDashboard {
         
         // Update progress
         if (dataInfo) {
-            dataInfo.textContent = `${stateName} counties loaded • Click a county for market data`;
+            dataInfo.textContent = `${stateName} counties loaded • Click county for data`;
         }
         
-        // Create county layer with default styling (no market data loading initially)
+        
+        // Create county layer with default styling
         this.currentLayer = L.geoJSON({
             type: 'FeatureCollection',
             features: stateCounties
@@ -1574,10 +1671,14 @@ class RealEstateDashboard {
             this.currentEscHandler = null;
         }
         
-        // Clear the current layer first
+        // Clear the current layers first
         if (this.currentLayer) {
             this.map.removeLayer(this.currentLayer);
             this.currentLayer = null;
+        }
+        if (this.stateNavigationLayer) {
+            this.map.removeLayer(this.stateNavigationLayer);
+            this.stateNavigationLayer = null;
         }
         
         // Reset map view with smooth animation
@@ -1854,11 +1955,17 @@ class RealEstateDashboard {
         if (this.backButton) {
             this.backButton.style.display = 'flex';
         }
+        if (this.backLabel) {
+            this.backLabel.style.display = 'block';
+        }
     }
     
     hideBackButton() {
         if (this.backButton) {
             this.backButton.style.display = 'none';
+        }
+        if (this.backLabel) {
+            this.backLabel.style.display = 'none';
         }
     }
     
@@ -1873,7 +1980,341 @@ class RealEstateDashboard {
                 // State level: return to national view
                 this.returnToNationalCountyView();
             }
+        } else if (this.currentView === 'state') {
+            if (this.currentDrillLevel === 'state') {
+                // State level: return to regional view (or national for Alaska/Hawaii)  
+                this.returnToRegionalStateView();
+            } else if (this.currentDrillLevel === 'regional') {
+                // Regional level: return to national state view
+                this.returnToNationalStateView();
+            }
         }
+    }
+    
+    async returnToRegionalView(stateName) {
+        console.log(`Returning to regional view for ${stateName}`);
+        
+        // Handle Alaska and Hawaii - go directly to national
+        if (stateName === 'Alaska' || stateName === 'Hawaii') {
+            this.returnToNationalCountyView();
+            return;
+        }
+        
+        // Get regional definition for this state
+        const regionalDef = this.regionalDefinitions[stateName];
+        if (!regionalDef) {
+            console.warn(`No regional definition for ${stateName}, returning to national`);
+            this.returnToNationalCountyView();
+            return;
+        }
+        
+        // Clear current layers
+        if (this.currentLayer) {
+            this.map.removeLayer(this.currentLayer);
+        }
+        if (this.stateNavigationLayer) {
+            this.map.removeLayer(this.stateNavigationLayer);
+        }
+        
+        // Set regional drill level
+        this.currentDrillLevel = 'regional';
+        this.currentRegionalBounds = regionalDef.bounds;
+        
+        // Create regional state layer showing the current state and its neighbors
+        await this.createRegionalStateLayer(stateName, regionalDef.neighbors);
+        
+        // Fit to regional bounds
+        this.map.fitBounds(regionalDef.bounds, {
+            padding: [30, 30],
+            maxZoom: 6
+        });
+        
+        // Update UI
+        const dataInfo = document.getElementById('dataInfo');
+        if (dataInfo) {
+            dataInfo.textContent = `${stateName} region • Click states to view counties • Click back for national view`;
+        }
+        
+        this.showBackButton();
+    }
+    
+    async createRegionalStateLayer(currentState, neighborStates) {
+        // Load state boundaries if not already loaded
+        if (!this.stateBoundaries) {
+            try {
+                const response = await fetch('./state_boundaries.json');
+                if (response.ok) {
+                    this.stateBoundaries = await response.json();
+                }
+            } catch (error) {
+                console.error('Could not load state boundaries for regional view:', error);
+                return;
+            }
+        }
+        
+        // Filter states to show only current state and neighbors
+        const statesToShow = [currentState, ...neighborStates];
+        const filteredFeatures = this.stateBoundaries.features.filter(feature => 
+            statesToShow.includes(feature.properties.NAME)
+        );
+        
+        // Create regional layer
+        this.currentLayer = L.geoJSON({
+            type: 'FeatureCollection',
+            features: filteredFeatures
+        }, {
+            style: (feature) => {
+                const stateName = feature.properties.NAME;
+                const isCurrentState = stateName === currentState;
+                
+                return {
+                    fillColor: isCurrentState ? 'rgba(255, 255, 255, 0.3)' : 'transparent',
+                    weight: 2,
+                    opacity: 1,
+                    color: '#ffffff',
+                    fillOpacity: isCurrentState ? 0.3 : 0
+                };
+            },
+            onEachFeature: (feature, layer) => {
+                const stateName = feature.properties.NAME;
+                
+                // Basic tooltip
+                layer.bindTooltip(stateName, {
+                    permanent: false,
+                    direction: 'center',
+                    className: 'state-tooltip'
+                });
+                
+                // Add hover effects
+                layer.on('mouseover', () => {
+                    layer.setStyle({
+                        fillColor: '#ffffff',
+                        fillOpacity: 0.7,
+                        weight: 3,
+                        color: '#ffffff'
+                    });
+                });
+                
+                layer.on('mouseout', () => {
+                    const isCurrentState = stateName === currentState;
+                    layer.setStyle({
+                        fillColor: isCurrentState ? 'rgba(255, 255, 255, 0.3)' : 'transparent',
+                        weight: 2,
+                        opacity: 1,
+                        color: '#ffffff',
+                        fillOpacity: isCurrentState ? 0.3 : 0
+                    });
+                });
+                
+                // Click handler to drill down to counties
+                layer.on('click', async () => {
+                    console.log(`Regional navigation: Drilling down to ${stateName} counties`);
+                    
+                    // Clear current layers
+                    if (this.currentLayer) {
+                        this.map.removeLayer(this.currentLayer);
+                    }
+                    
+                    // Update drilled state
+                    this.currentDrilledState = stateName;
+                    
+                    // Navigate to state counties
+                    await this.showStateCounties(stateName);
+                });
+            }
+        }).addTo(this.map);
+    }
+    
+    async returnToRegionalStateView() {
+        console.log('Returning to regional state view');
+        
+        // Find which state is currently selected
+        let selectedState = null;
+        if (this.selectedStateLayer) {
+            // Try to get the state name from the selected layer
+            const selectedFeature = this.selectedStateLayer.feature;
+            if (selectedFeature && selectedFeature.properties) {
+                selectedState = selectedFeature.properties.NAME;
+            }
+        }
+        
+        if (!selectedState) {
+            console.warn('No selected state found, returning to national view');
+            this.returnToNationalStateView();
+            return;
+        }
+        
+        // Handle Alaska and Hawaii - go directly to national
+        if (selectedState === 'Alaska' || selectedState === 'Hawaii') {
+            this.returnToNationalStateView();
+            return;
+        }
+        
+        // Get regional definition
+        const regionalDef = this.regionalDefinitions[selectedState];
+        if (!regionalDef) {
+            console.warn(`No regional definition for ${selectedState}, returning to national`);
+            this.returnToNationalStateView();
+            return;
+        }
+        
+        // Set regional drill level
+        this.currentDrillLevel = 'regional';
+        this.currentRegionalBounds = regionalDef.bounds;
+        
+        // Create regional state layer for state view
+        await this.createRegionalStateViewLayer(selectedState, regionalDef.neighbors);
+        
+        // Fit to regional bounds
+        this.map.fitBounds(regionalDef.bounds, {
+            padding: [30, 30],
+            maxZoom: 6
+        });
+        
+        // Update UI
+        const dataInfo = document.getElementById('dataInfo');
+        if (dataInfo) {
+            dataInfo.textContent = `${selectedState} region • Click states for analysis • Click back for national view`;
+        }
+        
+        this.showBackButton();
+    }
+    
+    async createRegionalStateViewLayer(currentState, neighborStates) {
+        // Filter states to show only current state and neighbors
+        const statesToShow = [currentState, ...neighborStates];
+        const filteredFeatures = this.stateBoundaries.features.filter(feature => 
+            statesToShow.includes(feature.properties.NAME)
+        );
+        
+        // Create regional layer with state view functionality
+        this.currentLayer = L.geoJSON({
+            type: 'FeatureCollection',
+            features: filteredFeatures
+        }, {
+            style: (feature) => {
+                const stateName = feature.properties.NAME;
+                const isCurrentState = stateName === currentState;
+                
+                return {
+                    fillColor: isCurrentState ? 'rgba(255, 255, 255, 0.3)' : 'transparent',
+                    weight: 2,
+                    opacity: 1,
+                    color: '#ffffff',
+                    fillOpacity: isCurrentState ? 0.3 : 0
+                };
+            },
+            onEachFeature: (feature, layer) => {
+                const stateName = feature.properties.NAME;
+                const stateData = this.stateData[stateName];
+                
+                // Add hover effects
+                layer.on('mouseover', () => {
+                    if (this.selectedStateLayer !== layer) {
+                        layer.setStyle({
+                            fillColor: '#ffffff',
+                            fillOpacity: 0.7,
+                            weight: 3,
+                            color: '#ffffff'
+                        });
+                    }
+                });
+                
+                layer.on('mouseout', () => {
+                    if (this.selectedStateLayer !== layer) {
+                        const isCurrentState = stateName === currentState;
+                        layer.setStyle({
+                            fillColor: isCurrentState ? 'rgba(255, 255, 255, 0.3)' : 'transparent',
+                            weight: 2,
+                            opacity: 1,
+                            color: '#ffffff',
+                            fillOpacity: isCurrentState ? 0.3 : 0
+                        });
+                    }
+                });
+                
+                // Handle state clicks - same as regular state view
+                layer.on('click', () => {
+                    if (stateData) {
+                        // Clear previous selection
+                        if (this.selectedStateLayer) {
+                            const prevFeature = this.selectedStateLayer.feature;
+                            const prevIsCurrentState = prevFeature && prevFeature.properties.NAME === currentState;
+                            this.selectedStateLayer.setStyle({
+                                fillColor: prevIsCurrentState ? 'rgba(255, 255, 255, 0.3)' : 'transparent',
+                                fillOpacity: prevIsCurrentState ? 0.3 : 0,
+                                weight: 2,
+                                color: '#ffffff'
+                            });
+                        }
+                        
+                        // Set new selection with white fill
+                        this.selectedStateLayer = layer;
+                        layer.setStyle({
+                            fillColor: '#ffffff',
+                            fillOpacity: 0.7,
+                            weight: 3,
+                            color: '#ffffff'
+                        });
+                        
+                        // Update drill level to state
+                        this.currentDrillLevel = 'state';
+                        
+                        // Snap to state bounds with smooth animation
+                        const bounds = layer.getBounds();
+                        this.map.fitBounds(bounds, {
+                            padding: [20, 20],
+                            maxZoom: 6,
+                            animate: true,
+                            duration: 1.0
+                        });
+                        
+                        console.log(`Regional state clicked: ${stateName} - snapping to bounds`);
+                        this.showDetailPanel(stateName, stateData);
+                    }
+                });
+                
+                // Add tooltip
+                layer.bindTooltip(stateName, {
+                    permanent: false,
+                    direction: 'center',
+                    className: 'state-tooltip'
+                });
+            }
+        }).addTo(this.map);
+        
+        // Set the current state as selected by default
+        if (this.selectedStateLayer) {
+            this.selectedStateLayer = null;
+        }
+        
+        // Find and select the current state layer
+        this.currentLayer.eachLayer((layer) => {
+            if (layer.feature && layer.feature.properties.NAME === currentState) {
+                this.selectedStateLayer = layer;
+                layer.setStyle({
+                    fillColor: '#ffffff',
+                    fillOpacity: 0.7,
+                    weight: 3,
+                    color: '#ffffff'
+                });
+                this.currentDrillLevel = 'state';
+            }
+        });
+    }
+    
+    returnToNationalStateView() {
+        console.log('Returning to national state view');
+        
+        this.cleanupViewState();
+        this.currentDrillLevel = 'national';
+        this.createBasicStateLayer();
+        
+        // Reset map view to national
+        this.map.setView([39.50, -98.35], 4);
+        
+        this.hideCloseButton();
+        this.hideBackButton();
     }
     
     returnToNationalView() {

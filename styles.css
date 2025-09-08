@@ -54,6 +54,11 @@ body {
     border-color: #777777;
 }
 
+.view-selector option:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+}
+
 .view-selector:focus {
     border-color: #ffffff;
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
@@ -830,4 +835,30 @@ body {
 .back-button:active {
     transform: translateY(0);
     background: rgba(255, 255, 255, 0.2);
+}
+
+.back-label {
+    position: absolute;
+    top: 26px;
+    right: 112px;
+    z-index: 1000;
+    color: white;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: normal;
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    pointer-events: none;
+}
+
+.state-navigation-tooltip {
+    background: rgba(59, 130, 246, 0.9);
+    border: 1px solid #3B82F6;
+    border-radius: 4px;
+    color: white;
+    font-size: 12px;
+    padding: 4px 8px;
+    font-weight: normal;
 }
