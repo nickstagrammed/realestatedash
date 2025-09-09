@@ -293,6 +293,15 @@ class RealEstateDashboard {
         if (this.map.getContainer()) {
             this.map.getContainer().blur();
         }
+        
+        // Clean up state navigation layer from County view
+        if (this.stateNavigationLayer) {
+            this.map.removeLayer(this.stateNavigationLayer);
+            this.stateNavigationLayer = null;
+        }
+        
+        // Clean up metro boundary from Metro view
+        this.clearMetroBoundary();
     }
     
     async createBasicStateLayer() {
@@ -397,6 +406,9 @@ class RealEstateDashboard {
             console.warn('No metro data available');
             return;
         }
+        
+        // Load metro boundaries for boundary visualization
+        await this.loadMetroBoundaries();
         
         // Load metro coordinates from SQLite database via API
         const metroCoordinates = await this.loadMetroCoordinatesFromDB();
@@ -520,6 +532,11 @@ class RealEstateDashboard {
                     this.showDetailPanel(csvMetroName, metroData);
                     // For metros, we need to get the CBSA code from the metro data
                     const cbsaCode = metroData.cbsa_code || csvMetroName;
+                    
+                    // Show metro boundary if boundaries are loaded
+                    if (this.metroBoundaries) {
+                        this.showMetroBoundary(cbsaCode, csvMetroName);
+                    }
                     // this.loadTrendChart('metro', cbsaCode); // Disabled 5-year trends
                 }
             });
@@ -528,8 +545,104 @@ class RealEstateDashboard {
         });
         
         this.currentLayer = L.layerGroup(markers).addTo(this.map);
+        
+        // Add map click handler for deselecting metros
+        this.map.on('click', (e) => {
+            // Only deselect if clicking on empty space (not on a marker)
+            if (this.selectedMetroMarker) {
+                this.highlightMarker(this.selectedMetroMarker, false);
+                this.selectedMetroMarker = null;
+                this.clearMetroBoundary();
+                
+                // Hide detail panel
+                this.restoreDefaultSidebar();
+            }
+        });
     }
     
+    async loadMetroBoundaries() {
+        if (!this.metroBoundaries) {
+            console.log('Loading metro boundaries...');
+            try {
+                const response = await fetch('./metro_boundaries.json');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                this.metroBoundaries = await response.json();
+                console.log('Metro boundaries loaded successfully', this.metroBoundaries.features.length, 'features');
+            } catch (error) {
+                console.error('Failed to load metro boundaries:', error);
+                return null;
+            }
+        }
+        return this.metroBoundaries;
+    }
+
+    showMetroBoundary(cbsaCode, metroName) {
+        // Clear any existing metro boundary
+        this.clearMetroBoundary();
+        
+        if (!this.metroBoundaries) {
+            console.warn('Metro boundaries not loaded');
+            return;
+        }
+        
+        // Find the metro boundary by CBSA code or name
+        const feature = this.metroBoundaries.features.find(f => {
+            // First try exact CBSA code match
+            if (f.properties.CBSAFP === cbsaCode) {
+                return true;
+            }
+            
+            // Then try exact name match
+            if (f.properties.NAME === metroName) {
+                return true;
+            }
+            
+            // Finally try city name match with word boundaries to avoid partial matches
+            const cityName = metroName.split(',')[0].trim();
+            const boundaryName = f.properties.NAME;
+            
+            // Use word boundary regex to ensure exact city name match
+            const cityRegex = new RegExp(`\\b${cityName}\\b`, 'i');
+            return cityRegex.test(boundaryName);
+        });
+        
+        if (!feature) {
+            console.warn(`Metro boundary not found for: ${metroName} (CBSA: ${cbsaCode})`);
+            return;
+        }
+        
+        console.log(`Showing boundary for: ${feature.properties.NAME}`);
+        
+        // Create the boundary layer with white styling
+        this.currentMetroBoundary = L.geoJSON(feature, {
+            style: {
+                fillColor: '#ffffff',
+                fillOpacity: 0.1,
+                color: '#ffffff',
+                weight: 2,
+                opacity: 0.8
+            }
+        }).addTo(this.map);
+        
+        // Bring metro markers to front
+        if (this.currentLayer) {
+            this.currentLayer.eachLayer(layer => {
+                if (layer.bringToFront) {
+                    layer.bringToFront();
+                }
+            });
+        }
+    }
+    
+    clearMetroBoundary() {
+        if (this.currentMetroBoundary) {
+            this.map.removeLayer(this.currentMetroBoundary);
+            this.currentMetroBoundary = null;
+        }
+    }
+
     async loadMetroCoordinatesFromDB() {
         console.log('🔄 Loading metro coordinates from static data...');
         try {
