@@ -4627,9 +4627,12 @@ class RealEstateDashboard {
     
     // Mobile-specific methods
     showMobileSidebar() {
-        const sidebar = document.querySelector('.sidebar');
+        const sidebar = document.querySelector('.detail-panel');
         if (sidebar && window.innerWidth <= 768) {
             sidebar.classList.add('active');
+            
+            // Add mobile close button if not exists
+            this.addMobileCloseButton(sidebar);
             
             // Add swipe/touch handlers for dismissing
             this.addMobileSidebarHandlers(sidebar);
@@ -4637,9 +4640,24 @@ class RealEstateDashboard {
     }
     
     hideMobileSidebar() {
-        const sidebar = document.querySelector('.sidebar');
+        const sidebar = document.querySelector('.detail-panel');
         if (sidebar) {
             sidebar.classList.remove('active');
+        }
+    }
+    
+    addMobileCloseButton(sidebar) {
+        // Check if close button already exists
+        let closeButton = sidebar.querySelector('.mobile-close');
+        if (!closeButton) {
+            closeButton = document.createElement('button');
+            closeButton.className = 'mobile-close';
+            closeButton.innerHTML = '×';
+            closeButton.onclick = () => {
+                this.hideMobileSidebar();
+                this.restoreDefaultSidebar();
+            };
+            sidebar.appendChild(closeButton);
         }
     }
     
@@ -4711,7 +4729,7 @@ class RealEstateDashboard {
     
     removeMobileSidebarHandlers() {
         if (this.mobileHandlers) {
-            const sidebar = document.querySelector('.sidebar');
+            const sidebar = document.querySelector('.detail-panel');
             if (sidebar) {
                 sidebar.removeEventListener('touchstart', this.mobileHandlers.touchStart);
                 sidebar.removeEventListener('touchmove', this.mobileHandlers.touchMove);
