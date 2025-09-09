@@ -3114,7 +3114,10 @@ class RealEstateDashboard {
                         labels: {
                             color: '#ffffff',
                             usePointStyle: true,
-                            padding: 20
+                            padding: 12,
+                            font: {
+                                size: 10
+                            }
                         }
                     },
                     tooltip: {
@@ -3140,11 +3143,25 @@ class RealEstateDashboard {
                         title: {
                             display: true,
                             text: 'Date',
-                            color: '#ffffff'
+                            color: '#ffffff',
+                            font: {
+                                size: 10
+                            }
                         },
                         ticks: {
                             color: '#cccccc',
-                            maxTicksLimit: 12
+                            maxTicksLimit: 6,
+                            font: {
+                                size: 9
+                            },
+                            callback: function(value, index, values) {
+                                const label = this.getLabelForValue(value);
+                                // Show only January of each year (assuming labels are in 'MMM YYYY' format)
+                                if (label && label.startsWith('Jan ')) {
+                                    return label;
+                                }
+                                return '';
+                            }
                         },
                         grid: {
                             color: '#333333'
@@ -3155,10 +3172,16 @@ class RealEstateDashboard {
                         title: {
                             display: true,
                             text: 'Number of Listings',
-                            color: '#ffffff'
+                            color: '#ffffff',
+                            font: {
+                                size: 10
+                            }
                         },
                         ticks: {
                             color: '#cccccc',
+                            font: {
+                                size: 9
+                            },
                             callback: function(value) {
                                 return value?.toLocaleString() || '';
                             }
@@ -3439,7 +3462,18 @@ class RealEstateDashboard {
                     x: {
                         ticks: {
                             color: '#ffffff',
-                            maxTicksLimit: 12
+                            maxTicksLimit: 6,
+                            font: {
+                                size: 9
+                            },
+                            callback: function(value, index, values) {
+                                const label = this.getLabelForValue(value);
+                                // Show only January of each year (assuming labels are in 'MMM YYYY' format)
+                                if (label && label.startsWith('Jan ')) {
+                                    return label;
+                                }
+                                return '';
+                            }
                         },
                         grid: {
                             color: '#333333'
@@ -3448,6 +3482,9 @@ class RealEstateDashboard {
                     y: {
                         ticks: {
                             color: '#ffffff',
+                            font: {
+                                size: 9
+                            },
                             callback: function(value) {
                                 if (isPrice) {
                                     return '$' + Math.round(value).toLocaleString();
@@ -3553,9 +3590,9 @@ class RealEstateDashboard {
                         labels: {
                             color: '#ffffff',
                             usePointStyle: true,
-                            padding: 20,
+                            padding: 12,
                             font: {
-                                size: 12
+                                size: 10
                             }
                         },
                         position: 'bottom'
@@ -3612,6 +3649,9 @@ class RealEstateDashboard {
                         },
                         ticks: {
                             color: '#ffffff',
+                            font: {
+                                size: 9
+                            },
                             callback: function(value) {
                                 return Math.round(value).toLocaleString();
                             }
@@ -3619,7 +3659,10 @@ class RealEstateDashboard {
                         title: {
                             display: true,
                             text: 'Active Listings Count',
-                            color: '#ffffff'
+                            color: '#ffffff',
+                            font: {
+                                size: 10
+                            }
                         }
                     },
                     x: {
@@ -3628,7 +3671,18 @@ class RealEstateDashboard {
                         },
                         ticks: {
                             color: '#ffffff',
-                            maxTicksLimit: 12
+                            maxTicksLimit: 6,
+                            font: {
+                                size: 9
+                            },
+                            callback: function(value, index, values) {
+                                const label = this.getLabelForValue(value);
+                                // Show only January of each year (assuming labels are in 'MMM YYYY' format)
+                                if (label && label.startsWith('Jan ')) {
+                                    return label;
+                                }
+                                return '';
+                            }
                         }
                     }
                 },
@@ -3719,9 +3773,9 @@ class RealEstateDashboard {
                         labels: {
                             color: '#ffffff',
                             usePointStyle: true,
-                            padding: 20,
+                            padding: 12,
                             font: {
-                                size: 12
+                                size: 10
                             }
                         }
                     }
@@ -3749,7 +3803,18 @@ class RealEstateDashboard {
                         },
                         ticks: {
                             color: '#ffffff',
-                            maxTicksLimit: 12
+                            maxTicksLimit: 6,
+                            font: {
+                                size: 9
+                            },
+                            callback: function(value, index, values) {
+                                const label = this.getLabelForValue(value);
+                                // Show only January of each year (assuming labels are in 'MMM YYYY' format)
+                                if (label && label.startsWith('Jan ')) {
+                                    return label;
+                                }
+                                return '';
+                            }
                         }
                     }
                 },
@@ -4072,9 +4137,9 @@ class RealEstateDashboard {
                         labels: {
                             color: '#ffffff',
                             usePointStyle: true,
-                            padding: 20,
+                            padding: 12,
                             font: {
-                                size: 12
+                                size: 10
                             }
                         },
                         position: 'bottom'

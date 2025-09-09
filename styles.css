@@ -487,10 +487,12 @@ body {
     padding: 1.5rem;
     max-width: 700px;
     width: 85%;
-    max-height: 85vh;
+    max-height: 80vh;
     overflow-y: auto;
     position: relative;
     box-shadow: 0 10px 30px rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
 }
 
 .lightbox-close {
@@ -530,18 +532,25 @@ body {
     padding: 1rem;
     border: 1px solid #333;
     margin-bottom: 1rem;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .lightbox-chart-container canvas {
     width: 100% !important;
-    height: 300px !important;
+    height: 350px !important;
+    max-height: 45vh;
 }
 
 .lightbox-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-    gap: 0.75rem;
-    margin-top: 0.75rem;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    flex-shrink: 0;
 }
 
 /* Specific layouts for different numbers of stats */
@@ -559,19 +568,19 @@ body {
 
 .lightbox-stat {
     background: #2a2a2a;
-    padding: 0.6rem;
-    border-radius: 6px;
+    padding: 0.4rem;
+    border-radius: 4px;
     text-align: center;
     min-width: 0; /* Allow flex shrinking */
 }
 
 .lightbox-stat-label {
     color: #aaa;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     text-transform: uppercase;
-    letter-spacing: 0.3px;
-    margin-bottom: 0.4rem;
-    min-height: 2.2rem;
+    letter-spacing: 0.2px;
+    margin-bottom: 0.3rem;
+    min-height: 1.8rem;
     display: flex;
     align-items: flex-start;
     justify-content: center;
@@ -583,11 +592,11 @@ body {
 
 .lightbox-stat-value {
     color: #fff;
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: bold;
     text-align: center;
-    line-height: 1.4rem;
-    height: 1.4rem;
+    line-height: 1.2rem;
+    height: 1.2rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1034,19 +1043,38 @@ body {
     /* Lightbox adjustments for mobile */
     .lightbox-modal {
         width: 95vw;
-        height: 90vh;
+        height: 85vh;
         max-width: none;
-        max-height: none;
-        margin: 5vh auto;
+        max-height: 85vh;
+        margin: 7.5vh auto;
+        padding: 1rem;
     }
     
     .lightbox-chart-container {
-        height: 250px;
+        min-height: 200px;
+    }
+    
+    .lightbox-chart-container canvas {
+        height: 250px !important;
+        max-height: 35vh !important;
     }
     
     .lightbox-stats {
         grid-template-columns: 1fr 1fr !important;
-        gap: 0.8rem;
+        gap: 0.4rem;
+    }
+    
+    .lightbox-stat {
+        padding: 0.3rem;
+    }
+    
+    .lightbox-stat-label {
+        font-size: 0.65rem;
+        min-height: 1.5rem;
+    }
+    
+    .lightbox-stat-value {
+        font-size: 0.9rem;
     }
     
     /* Data info adjustments */
