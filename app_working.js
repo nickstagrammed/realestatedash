@@ -3935,6 +3935,17 @@ class RealEstateDashboard {
             window.trendChart = null;
         }
         
+        // Override point sizes for better visibility
+        const modifiedChartData = {...chartData};
+        if (modifiedChartData.datasets) {
+            modifiedChartData.datasets = modifiedChartData.datasets.map(dataset => ({
+                ...dataset,
+                pointRadius: 1,
+                pointHoverRadius: 2.5,
+                pointBorderWidth: 0.5
+            }));
+        }
+        
         // Determine color based on metric type
         let color;
         if (metric === 'active_listing_count') {
@@ -3949,7 +3960,7 @@ class RealEstateDashboard {
         
         window.trendChart = new Chart(canvas, {
             type: 'line',
-            data: chartData,
+            data: modifiedChartData,
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
@@ -4132,18 +4143,27 @@ class RealEstateDashboard {
             window.trendChart = null;
         }
         
-        // Override the fill settings for better visibility
+        // Override the fill settings and point sizes for better visibility
         const chartData = {...indexedData.data};
         chartData.datasets = chartData.datasets.map(dataset => {
             if (dataset.label.includes('Actual')) {
-                // Remove fill completely for actual data
+                // Remove fill completely for actual data and set small points
                 return {
                     ...dataset,
                     backgroundColor: 'transparent',
-                    fill: false // No fill under data points
+                    fill: false, // No fill under data points
+                    pointRadius: 1,
+                    pointHoverRadius: 2.5,
+                    pointBorderWidth: 0.5
                 };
             }
-            return dataset;
+            // Apply small points to all datasets
+            return {
+                ...dataset,
+                pointRadius: 1,
+                pointHoverRadius: 2.5,
+                pointBorderWidth: 0.5
+            };
         });
 
         window.trendChart = new Chart(canvas, {
