@@ -862,3 +862,212 @@ body {
     padding: 4px 8px;
     font-weight: normal;
 }
+
+/* Mobile Responsive Design - Bottom Sheet Sidebar */
+@media (max-width: 768px) {
+    /* Main container adjustments */
+    .container {
+        flex-direction: column;
+        height: 100vh;
+    }
+    
+    .map-container {
+        flex: 1;
+        width: 100%;
+        position: relative;
+    }
+    
+    /* Bottom sheet sidebar */
+    .sidebar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: 60vh;
+        max-height: 70vh;
+        transform: translateY(100%);
+        transition: transform 0.3s ease-in-out;
+        z-index: 2000;
+        border-radius: 16px 16px 0 0;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+        overflow-y: auto;
+    }
+    
+    .sidebar.active {
+        transform: translateY(0);
+    }
+    
+    /* Add mobile handle for dragging */
+    .sidebar::before {
+        content: '';
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 40px;
+        height: 4px;
+        background: #666;
+        border-radius: 2px;
+        z-index: 1;
+    }
+    
+    /* Sidebar content adjustments */
+    .sidebar-content {
+        padding-top: 24px; /* Space for handle */
+    }
+    
+    /* Mobile controls */
+    .controls {
+        position: fixed;
+        top: 16px;
+        left: 16px;
+        right: 16px;
+        z-index: 1500;
+        flex-direction: row;
+        justify-content: space-between;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 8px 12px;
+        border-radius: 12px;
+        backdrop-filter: blur(10px);
+    }
+    
+    .view-selector {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .view-selector button {
+        padding: 8px 12px;
+        min-height: 44px; /* Touch-friendly size */
+        font-size: 0.9rem;
+    }
+    
+    /* Navigation buttons for mobile */
+    .navigation-buttons {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .back-button,
+    .close-button {
+        min-height: 44px;
+        min-width: 44px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+    }
+    
+    /* Metric cards - 2 columns on mobile */
+    .sidebar [style*="grid-template-columns: 1fr 1fr 1fr"] {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.8rem;
+    }
+    
+    /* Adjust metric card that spans 2 columns */
+    .metric-card[style*="grid-column: 1 / 3"] {
+        grid-column: 1 / 3 !important;
+    }
+    
+    /* Mobile typography */
+    .sidebar h2 {
+        font-size: 1.2rem !important;
+    }
+    
+    .sidebar h3 {
+        font-size: 1.1rem;
+    }
+    
+    .metric-card h5 {
+        font-size: 0.85rem;
+        margin-bottom: 0.3rem;
+    }
+    
+    .metric-value {
+        font-size: 1.1rem !important;
+    }
+    
+    .metric-change {
+        font-size: 0.75rem;
+    }
+    
+    /* Lightbox adjustments for mobile */
+    .lightbox-modal {
+        width: 95vw;
+        height: 90vh;
+        max-width: none;
+        max-height: none;
+        margin: 5vh auto;
+    }
+    
+    .lightbox-chart-container {
+        height: 250px;
+    }
+    
+    .lightbox-stats {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 0.8rem;
+    }
+    
+    /* Data info adjustments */
+    .data-info {
+        position: fixed;
+        bottom: 16px;
+        left: 16px;
+        right: 16px;
+        z-index: 1400;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        text-align: center;
+        backdrop-filter: blur(10px);
+        display: none; /* Hide on mobile when sidebar is active */
+    }
+    
+    .sidebar:not(.active) ~ .data-info {
+        display: block;
+    }
+    
+    /* Touch improvements */
+    .metric-card {
+        cursor: pointer;
+        -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .metric-card:active {
+        transform: scale(0.98);
+        transition: transform 0.1s ease;
+    }
+    
+    /* Hide desktop-only elements */
+    .sidebar-instructions {
+        display: none;
+    }
+}
+
+/* Tablet adjustments */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .sidebar {
+        width: 350px;
+        min-width: 350px;
+    }
+    
+    .controls {
+        right: 370px; /* Adjust for narrower sidebar */
+    }
+}
+
+/* Large screens */
+@media (min-width: 1400px) {
+    .sidebar {
+        width: 450px;
+        min-width: 450px;
+    }
+    
+    .controls {
+        right: 470px;
+    }
+}

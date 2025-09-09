@@ -302,6 +302,10 @@ class RealEstateDashboard {
         
         // Clean up metro boundary from Metro view
         this.clearMetroBoundary();
+        
+        // Clean up mobile handlers
+        this.removeMobileSidebarHandlers();
+        this.hideMobileSidebar();
     }
     
     async createBasicStateLayer() {
@@ -1523,6 +1527,11 @@ class RealEstateDashboard {
         `;
         
         detailContent.innerHTML = content;
+        
+        // Mobile: Show sidebar as bottom sheet
+        if (window.innerWidth <= 768) {
+            this.showMobileSidebar();
+        }
     }
     
     async showCountyTrendLightbox(countyId, metric) {
@@ -2718,6 +2727,11 @@ class RealEstateDashboard {
         `;
         
         detailContent.innerHTML = content;
+        
+        // Mobile: Show sidebar as bottom sheet
+        if (window.innerWidth <= 768) {
+            this.showMobileSidebar();
+        }
         
         // Show trends section for both states and metros - DISABLED
         const trendsSection = document.getElementById('trendsSection');
@@ -4609,6 +4623,105 @@ class RealEstateDashboard {
         console.log('Period 4 (202010): 720,000 → 87.1 (91.0 * (720000/749403))');
         
         return indexedData;
+    }
+    
+    // Mobile-specific methods
+    showMobileSidebar() {
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar && window.innerWidth <= 768) {
+            sidebar.classList.add('active');
+            
+            // Add swipe/touch handlers for dismissing
+            this.addMobileSidebarHandlers(sidebar);
+        }
+    }
+    
+    hideMobileSidebar() {
+        const sidebar = document.querySelector('.sidebar');
+        if (sidebar) {
+            sidebar.classList.remove('active');
+        }
+    }
+    
+    addMobileSidebarHandlers(sidebar) {
+        // Remove existing handlers to avoid duplicates
+        this.removeMobileSidebarHandlers();
+        
+        // Touch/swipe to dismiss
+        let startY = 0;
+        let currentY = 0;
+        let isDragging = false;
+        
+        const handleTouchStart = (e) => {
+            startY = e.touches[0].clientY;
+            isDragging = true;
+        };
+        
+        const handleTouchMove = (e) => {
+            if (!isDragging) return;
+            currentY = e.touches[0].clientY;
+            const deltaY = currentY - startY;
+            
+            // Only allow downward swipe to close
+            if (deltaY > 0) {
+                const progress = Math.min(deltaY / 100, 1);
+                sidebar.style.transform = `translateY(${deltaY}px)`;
+                sidebar.style.opacity = 1 - (progress * 0.3);
+            }
+        };
+        
+        const handleTouchEnd = (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            const deltaY = currentY - startY;
+            if (deltaY > 100) {
+                // Swipe down threshold reached - close sidebar
+                this.hideMobileSidebar();
+                this.restoreDefaultSidebar();
+            } else {
+                // Snap back to open position
+                sidebar.style.transform = '';
+                sidebar.style.opacity = '';
+            }
+        };
+        
+        // Tap outside to close
+        const handleMapClick = (e) => {
+            if (window.innerWidth <= 768) {
+                this.hideMobileSidebar();
+                this.restoreDefaultSidebar();
+            }
+        };
+        
+        // Store handlers for cleanup
+        this.mobileHandlers = {
+            touchStart: handleTouchStart,
+            touchMove: handleTouchMove,
+            touchEnd: handleTouchEnd,
+            mapClick: handleMapClick
+        };
+        
+        // Add event listeners
+        sidebar.addEventListener('touchstart', handleTouchStart, { passive: true });
+        sidebar.addEventListener('touchmove', handleTouchMove, { passive: true });
+        sidebar.addEventListener('touchend', handleTouchEnd, { passive: true });
+        this.map.on('click', handleMapClick);
+    }
+    
+    removeMobileSidebarHandlers() {
+        if (this.mobileHandlers) {
+            const sidebar = document.querySelector('.sidebar');
+            if (sidebar) {
+                sidebar.removeEventListener('touchstart', this.mobileHandlers.touchStart);
+                sidebar.removeEventListener('touchmove', this.mobileHandlers.touchMove);
+                sidebar.removeEventListener('touchend', this.mobileHandlers.touchEnd);
+            }
+            if (this.map) {
+                this.map.off('click', this.mobileHandlers.mapClick);
+            }
+            this.mobileHandlers = null;
+        }
     }
 }
 
