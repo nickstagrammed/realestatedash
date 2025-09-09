@@ -1463,6 +1463,10 @@ class RealEstateDashboard {
                 <span style="color: #aaa; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">COUNTY • ${this.formatDate(countyData.month_date)}</span>
             </div>
             
+            <div style="text-align: center; margin-bottom: 1rem; color: #ccc; font-size: 0.85rem;">
+                Click metric cards below for detailed trend analysis
+            </div>
+            
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto auto; gap: 1rem; margin-bottom: 1rem;">
                 <!-- Active Listings (spans 2 columns) -->
                 <div class="metric-card" style="grid-column: 1 / 3; display: flex; flex-direction: column; cursor: pointer;" onclick="window.dashboard.showCountyTrendLightbox('${countyId}', 'active_listing_count')">
@@ -2652,6 +2656,10 @@ class RealEstateDashboard {
             <div style="text-align: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #444;">
                 <h2 style="color: #ffffff; margin: 0; font-size: 1.4rem;">${locationName}</h2>
                 <span style="color: #aaa; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px;">${locationTypeLabel}: ${locationId} • ${this.formatDate(locationData.last_updated)}</span>
+            </div>
+            
+            <div style="text-align: center; margin-bottom: 1rem; color: #ccc; font-size: 0.85rem;">
+                Click metric cards below for detailed trend analysis
             </div>
             
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: auto auto; gap: 1rem; margin-bottom: 1rem;">
