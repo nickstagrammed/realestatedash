@@ -4027,8 +4027,9 @@ class RealEstateDashboard {
                 },
                 elements: {
                     point: {
-                        radius: 1.5,
-                        hoverRadius: 3
+                        radius: 1,
+                        hoverRadius: 2.5,
+                        borderWidth: 0.5
                     },
                     line: {
                         tension: 0.1,
@@ -4248,8 +4249,9 @@ class RealEstateDashboard {
                 },
                 elements: {
                     point: {
-                        radius: 1.5,
-                        hoverRadius: 3
+                        radius: 1,
+                        hoverRadius: 2.5,
+                        borderWidth: 0.5
                     },
                     line: {
                         tension: 0.1,
@@ -4486,9 +4488,9 @@ class RealEstateDashboard {
                             tension: 0.4,
                             pointBackgroundColor: '#ff6347',
                             pointBorderColor: '#ffffff',
-                            pointBorderWidth: 1,
-                            pointRadius: 1.5,
-                            pointHoverRadius: 3
+                            pointBorderWidth: 0.5,
+                            pointRadius: 1,
+                            pointHoverRadius: 2.5
                         },
                         {
                             label: 'National Median Days',
@@ -4499,9 +4501,9 @@ class RealEstateDashboard {
                             tension: 0.4,
                             pointBackgroundColor: '#64748B',
                             pointBorderColor: '#ffffff',
-                            pointBorderWidth: 1,
-                            pointRadius: 1.5,
-                            pointHoverRadius: 3
+                            pointBorderWidth: 0.5,
+                            pointRadius: 1,
+                            pointHoverRadius: 2.5
                         }
                     ]
                 }
