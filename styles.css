@@ -855,13 +855,13 @@ body {
     /* Bottom sheet sidebar */
     .detail-panel {
         position: fixed;
-        bottom: 0;
+        bottom: -75vh; /* Start completely hidden */
         left: 0;
         right: 0;
         width: 100%;
-        height: 50vh;
-        max-height: 60vh;
-        transform: translateY(100%);
+        height: 75vh;
+        max-height: 80vh;
+        transform: translateY(-80px); /* Show just the header portion */
         transition: transform 0.3s ease-in-out;
         z-index: 2000;
         border-radius: 16px 16px 0 0;
@@ -872,7 +872,7 @@ body {
     }
     
     .detail-panel.active {
-        transform: translateY(0);
+        transform: translateY(-75vh); /* Fully visible when active */
     }
     
     /* Add mobile handle for dragging */
@@ -913,9 +913,46 @@ body {
         background: #555;
     }
     
+    /* Sidebar header adjustments */
+    .sidebar-header {
+        padding: 1rem;
+        background: #2a2a2a;
+        border-bottom: 1px solid #444;
+        border-radius: 16px 16px 0 0;
+        position: relative;
+        z-index: 5;
+    }
+    
+    /* Mobile view selector styling */
+    .view-selector {
+        width: 100%;
+        min-height: 44px; /* Touch-friendly size */
+        padding: 12px 16px;
+        background: #333333;
+        color: #ffffff;
+        border: 1px solid #555555;
+        border-radius: 8px;
+        font-size: 1rem;
+        cursor: pointer;
+        outline: none;
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23ffffff' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+        background-position: right 12px center;
+        background-repeat: no-repeat;
+        background-size: 16px;
+        padding-right: 40px;
+    }
+    
+    .view-selector:focus {
+        border-color: #ffffff;
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+    }
+    
     /* Sidebar content adjustments */
     .sidebar-content {
-        padding-top: 40px; /* Space for handle and close button */
+        padding-top: 20px; /* Reduced since header has its own padding */
     }
     
     /* Mobile controls */

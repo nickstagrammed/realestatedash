@@ -116,6 +116,11 @@ class RealEstateDashboard {
         this.setupViewSelector();
         this.setupNavigationButtons();
         
+        // Initialize mobile collapsed sidebar handlers for upward swipe
+        if (window.innerWidth <= 768) {
+            this.addCollapsedSidebarHandlers();
+        }
+        
         // Set initial sidebar title and content
         this.updateSidebarTitle();
         
@@ -4639,10 +4644,76 @@ class RealEstateDashboard {
         }
     }
     
+    // Add touch handlers to collapsed sidebar for upward swipe detection
+    addCollapsedSidebarHandlers() {
+        const sidebar = document.querySelector('.detail-panel');
+        if (!sidebar || window.innerWidth > 768) return;
+        
+        let startY = 0;
+        let currentY = 0;
+        let isDragging = false;
+        
+        const handleTouchStart = (e) => {
+            // Only handle touches on the visible header area when collapsed
+            if (!sidebar.classList.contains('active')) {
+                startY = e.touches[0].clientY;
+                isDragging = true;
+            }
+        };
+        
+        const handleTouchMove = (e) => {
+            if (!isDragging || sidebar.classList.contains('active')) return;
+            currentY = e.touches[0].clientY;
+            const deltaY = currentY - startY;
+            
+            // Detect upward swipe (negative deltaY)
+            if (deltaY < -20) {
+                // Show preview of expansion
+                const progress = Math.min(Math.abs(deltaY) / 100, 1);
+                sidebar.style.transform = `translateY(${-80 - (progress * 100)}px)`;
+            }
+        };
+        
+        const handleTouchEnd = (e) => {
+            if (!isDragging || sidebar.classList.contains('active')) return;
+            isDragging = false;
+            
+            const deltaY = currentY - startY;
+            if (deltaY < -50) {
+                // Upward swipe threshold reached - show sidebar
+                sidebar.style.transform = '';
+                this.showMobileSidebar();
+            } else {
+                // Snap back to collapsed position
+                sidebar.style.transform = 'translateY(-80px)';
+            }
+        };
+        
+        // Store handlers for cleanup
+        this.collapsedHandlers = {
+            touchStart: handleTouchStart,
+            touchMove: handleTouchMove,
+            touchEnd: handleTouchEnd
+        };
+        
+        // Add event listeners
+        sidebar.addEventListener('touchstart', handleTouchStart, { passive: true });
+        sidebar.addEventListener('touchmove', handleTouchMove, { passive: true });
+        sidebar.addEventListener('touchend', handleTouchEnd, { passive: true });
+    }
+    
     hideMobileSidebar() {
         const sidebar = document.querySelector('.detail-panel');
         if (sidebar) {
             sidebar.classList.remove('active');
+            
+            // Re-add collapsed handlers for upward swipe detection
+            if (window.innerWidth <= 768) {
+                setTimeout(() => {
+                    this.removeCollapsedSidebarHandlers();
+                    this.addCollapsedSidebarHandlers();
+                }, 300); // Wait for transition to complete
+            }
         }
     }
     
@@ -4739,6 +4810,18 @@ class RealEstateDashboard {
                 this.map.off('click', this.mobileHandlers.mapClick);
             }
             this.mobileHandlers = null;
+        }
+    }
+    
+    removeCollapsedSidebarHandlers() {
+        if (this.collapsedHandlers) {
+            const sidebar = document.querySelector('.detail-panel');
+            if (sidebar) {
+                sidebar.removeEventListener('touchstart', this.collapsedHandlers.touchStart);
+                sidebar.removeEventListener('touchmove', this.collapsedHandlers.touchMove);
+                sidebar.removeEventListener('touchend', this.collapsedHandlers.touchEnd);
+            }
+            this.collapsedHandlers = null;
         }
     }
 }
