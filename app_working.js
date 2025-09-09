@@ -3442,9 +3442,9 @@ class RealEstateDashboard {
                     tension: 0.4,
                     pointBackgroundColor: color,
                     pointBorderColor: '#ffffff',
-                    pointBorderWidth: 0.5,
-                    pointRadius: 1.5,
-                    pointHoverRadius: 3
+                    pointBorderWidth: 1,
+                    pointRadius: 3,
+                    pointHoverRadius: 5
                 }]
             },
             options: {
@@ -3686,16 +3686,6 @@ class RealEstateDashboard {
                         }
                     }
                 },
-                elements: {
-                    point: {
-                        radius: 2,
-                        hoverRadius: 6
-                    },
-                    line: {
-                        tension: 0.1,
-                        borderWidth: 2
-                    }
-                },
                 interaction: {
                     intersect: false,
                     mode: 'index'
@@ -3828,16 +3818,6 @@ class RealEstateDashboard {
                         }
                     }
                 },
-                elements: {
-                    point: {
-                        radius: 2,
-                        hoverRadius: 6
-                    },
-                    line: {
-                        tension: 0.1,
-                        borderWidth: 2
-                    }
-                },
                 interaction: {
                     intersect: false,
                     mode: 'index'
@@ -3941,8 +3921,8 @@ class RealEstateDashboard {
         if (modifiedChartData.datasets) {
             modifiedChartData.datasets = modifiedChartData.datasets.map(dataset => ({
                 ...dataset,
-                pointRadius: isMobile ? 1 : 2,
-                pointHoverRadius: isMobile ? 2.5 : 4,
+                pointRadius: isMobile ? 1 : 3,
+                pointHoverRadius: isMobile ? 2.5 : 5,
                 pointBorderWidth: isMobile ? 0.5 : 1
             }));
         }
@@ -4039,8 +4019,8 @@ class RealEstateDashboard {
                 },
                 elements: {
                     point: {
-                        radius: 2,
-                        hoverRadius: 6
+                        radius: 3,
+                        hoverRadius: 5
                     },
                     line: {
                         tension: 0.1,
@@ -4161,8 +4141,8 @@ class RealEstateDashboard {
             // Apply responsive points to all datasets
             return {
                 ...dataset,
-                pointRadius: isMobile ? 1 : 2,
-                pointHoverRadius: isMobile ? 2.5 : 4,
+                pointRadius: isMobile ? 1 : 3,
+                pointHoverRadius: isMobile ? 2.5 : 5,
                 pointBorderWidth: isMobile ? 0.5 : 1
             };
         });
@@ -4270,8 +4250,8 @@ class RealEstateDashboard {
                 },
                 elements: {
                     point: {
-                        radius: 2,
-                        hoverRadius: 6
+                        radius: 3,
+                        hoverRadius: 5
                     },
                     line: {
                         tension: 0.1,
@@ -4509,8 +4489,8 @@ class RealEstateDashboard {
                             pointBackgroundColor: '#ff6347',
                             pointBorderColor: '#ffffff',
                             pointBorderWidth: window.innerWidth <= 768 ? 0.5 : 1,
-                            pointRadius: window.innerWidth <= 768 ? 1 : 2,
-                            pointHoverRadius: window.innerWidth <= 768 ? 2.5 : 4
+                            pointRadius: window.innerWidth <= 768 ? 1 : 3,
+                            pointHoverRadius: window.innerWidth <= 768 ? 2.5 : 5
                         },
                         {
                             label: 'National Median Days',
@@ -4522,8 +4502,8 @@ class RealEstateDashboard {
                             pointBackgroundColor: '#64748B',
                             pointBorderColor: '#ffffff',
                             pointBorderWidth: window.innerWidth <= 768 ? 0.5 : 1,
-                            pointRadius: window.innerWidth <= 768 ? 1 : 2,
-                            pointHoverRadius: window.innerWidth <= 768 ? 2.5 : 4
+                            pointRadius: window.innerWidth <= 768 ? 1 : 3,
+                            pointHoverRadius: window.innerWidth <= 768 ? 2.5 : 5
                         }
                     ]
                 }
