@@ -850,7 +850,7 @@ body {
     }
     
     /* Main container adjustments */
-    .container {
+    .main-content {
         flex-direction: column;
         height: 100vh;
     }
