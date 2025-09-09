@@ -3686,6 +3686,16 @@ class RealEstateDashboard {
                         }
                     }
                 },
+                elements: {
+                    point: {
+                        radius: 1.5,
+                        hoverRadius: 3
+                    },
+                    line: {
+                        tension: 0.1,
+                        borderWidth: 2
+                    }
+                },
                 interaction: {
                     intersect: false,
                     mode: 'index'
@@ -3816,6 +3826,16 @@ class RealEstateDashboard {
                                 return '';
                             }
                         }
+                    }
+                },
+                elements: {
+                    point: {
+                        radius: 1.5,
+                        hoverRadius: 3
+                    },
+                    line: {
+                        tension: 0.1,
+                        borderWidth: 2
                     }
                 },
                 interaction: {
@@ -4003,6 +4023,16 @@ class RealEstateDashboard {
                                 return Math.round(value).toLocaleString();
                             }
                         }
+                    }
+                },
+                elements: {
+                    point: {
+                        radius: 1.5,
+                        hoverRadius: 3
+                    },
+                    line: {
+                        tension: 0.1,
+                        borderWidth: 2
                     }
                 }
             }
@@ -4214,6 +4244,16 @@ class RealEstateDashboard {
                                 return Math.round(value).toLocaleString();
                             }
                         }
+                    }
+                },
+                elements: {
+                    point: {
+                        radius: 1.5,
+                        hoverRadius: 3
+                    },
+                    line: {
+                        tension: 0.1,
+                        borderWidth: 2
                     }
                 }
             }
@@ -4447,8 +4487,8 @@ class RealEstateDashboard {
                             pointBackgroundColor: '#ff6347',
                             pointBorderColor: '#ffffff',
                             pointBorderWidth: 1,
-                            pointRadius: 3,
-                            pointHoverRadius: 5
+                            pointRadius: 1.5,
+                            pointHoverRadius: 3
                         },
                         {
                             label: 'National Median Days',
@@ -4460,8 +4500,8 @@ class RealEstateDashboard {
                             pointBackgroundColor: '#64748B',
                             pointBorderColor: '#ffffff',
                             pointBorderWidth: 1,
-                            pointRadius: 3,
-                            pointHoverRadius: 5
+                            pointRadius: 1.5,
+                            pointHoverRadius: 3
                         }
                     ]
                 }
