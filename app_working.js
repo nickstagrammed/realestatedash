@@ -587,29 +587,27 @@ class RealEstateDashboard {
             return;
         }
         
-        // Find the metro boundary by CBSA code or name
-        const feature = this.metroBoundaries.features.find(f => {
-            // First try exact CBSA code match
-            if (f.properties.CBSAFP === cbsaCode) {
-                return true;
+        // Find the metro boundary by CBSA code - the most reliable method
+        let feature = null;
+        
+        // Primary method: Match by CBSA code (should work for 99% of cases)
+        if (cbsaCode && cbsaCode !== metroName) {
+            feature = this.metroBoundaries.features.find(f => f.properties.CBSAFP === cbsaCode.toString());
+            if (feature) {
+                console.log(`✅ Matched by CBSA code ${cbsaCode}: ${feature.properties.NAME}`);
             }
-            
-            // Then try exact name match
-            if (f.properties.NAME === metroName) {
-                return true;
+        }
+        
+        // Fallback: Try exact name match for edge cases
+        if (!feature) {
+            feature = this.metroBoundaries.features.find(f => f.properties.NAME === metroName);
+            if (feature) {
+                console.log(`✅ Matched by exact name: ${feature.properties.NAME}`);
             }
-            
-            // Finally try city name match with word boundaries to avoid partial matches
-            const cityName = metroName.split(',')[0].trim();
-            const boundaryName = f.properties.NAME;
-            
-            // Use word boundary regex to ensure exact city name match
-            const cityRegex = new RegExp(`\\b${cityName}\\b`, 'i');
-            return cityRegex.test(boundaryName);
-        });
+        }
         
         if (!feature) {
-            console.warn(`Metro boundary not found for: ${metroName} (CBSA: ${cbsaCode})`);
+            console.warn(`❌ No boundary match found for: ${metroName} (CBSA: ${cbsaCode})`);
             return;
         }
         
