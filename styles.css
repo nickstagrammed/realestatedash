@@ -568,7 +568,7 @@ body {
 
 .lightbox-stat {
     background: #2a2a2a;
-    padding: 0.4rem;
+    padding: 0.3rem;
     border-radius: 4px;
     text-align: center;
     min-width: 0; /* Allow flex shrinking */
@@ -576,27 +576,27 @@ body {
 
 .lightbox-stat-label {
     color: #aaa;
-    font-size: 0.7rem;
+    font-size: 0.6rem;
     text-transform: uppercase;
-    letter-spacing: 0.2px;
-    margin-bottom: 0.3rem;
-    min-height: 1.8rem;
+    letter-spacing: 0.1px;
+    margin-bottom: 0.2rem;
+    min-height: 1.4rem;
     display: flex;
     align-items: flex-start;
     justify-content: center;
     text-align: center;
-    line-height: 1.1;
+    line-height: 1.0;
     word-wrap: break-word;
     hyphens: auto;
 }
 
 .lightbox-stat-value {
     color: #fff;
-    font-size: 1rem;
+    font-size: 0.85rem;
     font-weight: bold;
     text-align: center;
-    line-height: 1.2rem;
-    height: 1.2rem;
+    line-height: 1.0rem;
+    height: 1.0rem;
     display: flex;
     align-items: center;
     justify-content: center;

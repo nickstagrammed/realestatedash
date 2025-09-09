@@ -3114,9 +3114,9 @@ class RealEstateDashboard {
                         labels: {
                             color: '#ffffff',
                             usePointStyle: true,
-                            padding: 12,
+                            padding: 6,
                             font: {
-                                size: 10
+                                size: 8
                             }
                         }
                     },
@@ -3145,14 +3145,14 @@ class RealEstateDashboard {
                             text: 'Date',
                             color: '#ffffff',
                             font: {
-                                size: 10
+                                size: 8
                             }
                         },
                         ticks: {
                             color: '#cccccc',
                             maxTicksLimit: 6,
                             font: {
-                                size: 9
+                                size: 8
                             },
                             callback: function(value, index, values) {
                                 const label = this.getLabelForValue(value);
@@ -3174,13 +3174,13 @@ class RealEstateDashboard {
                             text: 'Number of Listings',
                             color: '#ffffff',
                             font: {
-                                size: 10
+                                size: 8
                             }
                         },
                         ticks: {
                             color: '#cccccc',
                             font: {
-                                size: 9
+                                size: 8
                             },
                             callback: function(value) {
                                 return value?.toLocaleString() || '';
@@ -3437,14 +3437,14 @@ class RealEstateDashboard {
                     data: trendData.map(d => d.value),
                     borderColor: color,
                     backgroundColor: color + '20',
-                    borderWidth: 2,
+                    borderWidth: 1.5,
                     fill: true,
                     tension: 0.4,
                     pointBackgroundColor: color,
                     pointBorderColor: '#ffffff',
-                    pointBorderWidth: 1,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
+                    pointBorderWidth: 0.5,
+                    pointRadius: 1.5,
+                    pointHoverRadius: 3
                 }]
             },
             options: {
@@ -3464,7 +3464,7 @@ class RealEstateDashboard {
                             color: '#ffffff',
                             maxTicksLimit: 6,
                             font: {
-                                size: 9
+                                size: 8
                             },
                             callback: function(value, index, values) {
                                 const label = this.getLabelForValue(value);
@@ -3483,7 +3483,7 @@ class RealEstateDashboard {
                         ticks: {
                             color: '#ffffff',
                             font: {
-                                size: 9
+                                size: 8
                             },
                             callback: function(value) {
                                 if (isPrice) {
@@ -3590,9 +3590,9 @@ class RealEstateDashboard {
                         labels: {
                             color: '#ffffff',
                             usePointStyle: true,
-                            padding: 12,
+                            padding: 6,
                             font: {
-                                size: 10
+                                size: 8
                             }
                         },
                         position: 'bottom'
@@ -3650,7 +3650,7 @@ class RealEstateDashboard {
                         ticks: {
                             color: '#ffffff',
                             font: {
-                                size: 9
+                                size: 8
                             },
                             callback: function(value) {
                                 return Math.round(value).toLocaleString();
@@ -3661,7 +3661,7 @@ class RealEstateDashboard {
                             text: 'Active Listings Count',
                             color: '#ffffff',
                             font: {
-                                size: 10
+                                size: 8
                             }
                         }
                     },
@@ -3673,7 +3673,7 @@ class RealEstateDashboard {
                             color: '#ffffff',
                             maxTicksLimit: 6,
                             font: {
-                                size: 9
+                                size: 8
                             },
                             callback: function(value, index, values) {
                                 const label = this.getLabelForValue(value);
@@ -3773,9 +3773,9 @@ class RealEstateDashboard {
                         labels: {
                             color: '#ffffff',
                             usePointStyle: true,
-                            padding: 12,
+                            padding: 6,
                             font: {
-                                size: 10
+                                size: 8
                             }
                         }
                     }
@@ -3805,7 +3805,7 @@ class RealEstateDashboard {
                             color: '#ffffff',
                             maxTicksLimit: 6,
                             font: {
-                                size: 9
+                                size: 8
                             },
                             callback: function(value, index, values) {
                                 const label = this.getLabelForValue(value);
@@ -4137,9 +4137,9 @@ class RealEstateDashboard {
                         labels: {
                             color: '#ffffff',
                             usePointStyle: true,
-                            padding: 12,
+                            padding: 6,
                             font: {
-                                size: 10
+                                size: 8
                             }
                         },
                         position: 'bottom'
@@ -4442,7 +4442,7 @@ class RealEstateDashboard {
                             data: countyTrends.data.datasets[0].data,
                             borderColor: '#ff6347',
                             backgroundColor: '#ff634720',
-                            borderWidth: 2,
+                            borderWidth: 1.5,
                             tension: 0.4,
                             pointBackgroundColor: '#ff6347',
                             pointBorderColor: '#ffffff',
@@ -4455,7 +4455,7 @@ class RealEstateDashboard {
                             data: nationalChartData.data,
                             borderColor: '#64748B',
                             backgroundColor: '#64748B20',
-                            borderWidth: 2,
+                            borderWidth: 1.5,
                             tension: 0.4,
                             pointBackgroundColor: '#64748B',
                             pointBorderColor: '#ffffff',
