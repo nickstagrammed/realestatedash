@@ -3688,8 +3688,8 @@ class RealEstateDashboard {
                 },
                 elements: {
                     point: {
-                        radius: 1.5,
-                        hoverRadius: 3
+                        radius: 2,
+                        hoverRadius: 6
                     },
                     line: {
                         tension: 0.1,
@@ -3830,8 +3830,8 @@ class RealEstateDashboard {
                 },
                 elements: {
                     point: {
-                        radius: 1.5,
-                        hoverRadius: 3
+                        radius: 2,
+                        hoverRadius: 6
                     },
                     line: {
                         tension: 0.1,
@@ -3935,14 +3935,15 @@ class RealEstateDashboard {
             window.trendChart = null;
         }
         
-        // Override point sizes for better visibility
+        // Override point sizes for better visibility (responsive)
         const modifiedChartData = {...chartData};
+        const isMobile = window.innerWidth <= 768;
         if (modifiedChartData.datasets) {
             modifiedChartData.datasets = modifiedChartData.datasets.map(dataset => ({
                 ...dataset,
-                pointRadius: 1,
-                pointHoverRadius: 2.5,
-                pointBorderWidth: 0.5
+                pointRadius: isMobile ? 1 : 2,
+                pointHoverRadius: isMobile ? 2.5 : 4,
+                pointBorderWidth: isMobile ? 0.5 : 1
             }));
         }
         
@@ -4038,9 +4039,8 @@ class RealEstateDashboard {
                 },
                 elements: {
                     point: {
-                        radius: 1,
-                        hoverRadius: 2.5,
-                        borderWidth: 0.5
+                        radius: 2,
+                        hoverRadius: 6
                     },
                     line: {
                         tension: 0.1,
@@ -4145,24 +4145,25 @@ class RealEstateDashboard {
         
         // Override the fill settings and point sizes for better visibility
         const chartData = {...indexedData.data};
+        const isMobile = window.innerWidth <= 768;
         chartData.datasets = chartData.datasets.map(dataset => {
             if (dataset.label.includes('Actual')) {
-                // Remove fill completely for actual data and set small points
+                // Remove fill completely for actual data and set responsive points
                 return {
                     ...dataset,
                     backgroundColor: 'transparent',
                     fill: false, // No fill under data points
-                    pointRadius: 1,
-                    pointHoverRadius: 2.5,
-                    pointBorderWidth: 0.5
+                    pointRadius: isMobile ? 1 : 2,
+                    pointHoverRadius: isMobile ? 2.5 : 4,
+                    pointBorderWidth: isMobile ? 0.5 : 1
                 };
             }
-            // Apply small points to all datasets
+            // Apply responsive points to all datasets
             return {
                 ...dataset,
-                pointRadius: 1,
-                pointHoverRadius: 2.5,
-                pointBorderWidth: 0.5
+                pointRadius: isMobile ? 1 : 2,
+                pointHoverRadius: isMobile ? 2.5 : 4,
+                pointBorderWidth: isMobile ? 0.5 : 1
             };
         });
 
@@ -4269,9 +4270,8 @@ class RealEstateDashboard {
                 },
                 elements: {
                     point: {
-                        radius: 1,
-                        hoverRadius: 2.5,
-                        borderWidth: 0.5
+                        radius: 2,
+                        hoverRadius: 6
                     },
                     line: {
                         tension: 0.1,
@@ -4508,9 +4508,9 @@ class RealEstateDashboard {
                             tension: 0.4,
                             pointBackgroundColor: '#ff6347',
                             pointBorderColor: '#ffffff',
-                            pointBorderWidth: 0.5,
-                            pointRadius: 1,
-                            pointHoverRadius: 2.5
+                            pointBorderWidth: window.innerWidth <= 768 ? 0.5 : 1,
+                            pointRadius: window.innerWidth <= 768 ? 1 : 2,
+                            pointHoverRadius: window.innerWidth <= 768 ? 2.5 : 4
                         },
                         {
                             label: 'National Median Days',
@@ -4521,9 +4521,9 @@ class RealEstateDashboard {
                             tension: 0.4,
                             pointBackgroundColor: '#64748B',
                             pointBorderColor: '#ffffff',
-                            pointBorderWidth: 0.5,
-                            pointRadius: 1,
-                            pointHoverRadius: 2.5
+                            pointBorderWidth: window.innerWidth <= 768 ? 0.5 : 1,
+                            pointRadius: window.innerWidth <= 768 ? 1 : 2,
+                            pointHoverRadius: window.innerWidth <= 768 ? 2.5 : 4
                         }
                     ]
                 }
