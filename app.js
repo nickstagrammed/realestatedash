@@ -6,13 +6,13 @@ class RealEstateDashboard {
         this.dataProcessor = null;
         this.stateData = {};
         this.isDataLoaded = false;
-        
+
         // Current view settings
         this.currentLevel = 'national';
         this.currentMetric = 'active_listing_count';
         this.currentTimeframe = '5y';
         this.currentViewMode = 'beta';
-        
+
         this.init();
     }
     
@@ -593,10 +593,15 @@ class RealEstateDashboard {
     }
     
     // Generate 5-year trend data for a specific metric
-    generate5YearTrendData(currentValue, metric) {
+    generate5YearTrendData(currentValue, metric, stateData) {
         const trendData = [];
-        const currentDate = new Date();
-        
+
+        // Get the latest actual date from the state data
+        const latestYYYYMM = stateData.last_updated;
+        const latestYear = Math.floor(latestYYYYMM / 100);
+        const latestMonth = latestYYYYMM % 100;
+        const currentDate = new Date(latestYear, latestMonth - 1, 1); // month is 0-indexed
+
         // Create 60 months of data (5 years)
         for (let i = 59; i >= 0; i--) {
             const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
@@ -657,11 +662,16 @@ class RealEstateDashboard {
         
         title.textContent = `${metricLabels[metric]} - 5 Year Trend`;
         subtitle.textContent = `${stateName} • ${this.formatDate(stateData.last_updated)}`;
-        
-        // Generate trend data
-        const currentValue = stateData[metric];
-        const trendData = this.generate5YearTrendData(currentValue, metric);
-        
+
+        // Get real historical data from dataProcessor (last 60 months = 5 years)
+        const historicalData = this.dataProcessor.getStateHistoricalData(stateName, metric, 60);
+
+        // Convert to format expected by chart
+        const trendData = historicalData.map(row => ({
+            label: row.label,
+            value: row.value
+        }));
+
         // Show overlay
         overlay.classList.add('active');
         

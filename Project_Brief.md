@@ -1,5 +1,37 @@
 # Real Estate Beta Dashboard - Project Brief
 
+## ⚠️ IMPORTANT: Recent Updates (January 8, 2026)
+
+### Data Loading Changes
+- **Dashboard now uses CSV files exclusively** for all trend charts (state, metro, county views)
+- **Indexed performance JSON files are DISABLED** until they can be regenerated with current data
+- CSV files updated to December 2025 - all views now show correct latest data
+
+### Disabled Features (Temporarily)
+The following features are **intentionally disabled** in the code and should remain disabled until indexed JSON files are regenerated:
+1. **Indexed Performance Charts** - State/Metro/County "vs National Index" comparison charts
+   - Location: `app_working.js` lines 3334, 3278, 3307, 1583
+   - Disabled with: `if (false && supportsIndexed)`
+2. **Median Days Comparison Charts** - State/Metro median days with national comparison
+   - Location: `app_working.js` lines 3278, 3307
+   - Disabled with: `if (false && metric === 'median_days_on_market')`
+
+### Files Requiring Updates
+When new data arrives (e.g., January 2026):
+- ✅ **CSV Files** (will auto-update charts):
+  - `data/national_data.csv`
+  - `data/state_data.csv`
+  - `data/metro_data.csv`
+  - `data/county_data.csv`
+- ❌ **JSON Files** (need regeneration, currently disabled):
+  - `data/*_indexed_*.json` (12 files for state/metro/county indexed performance)
+
+### Server Configuration
+- `serve.py` configured to disable caching for `.js` files to ensure updates load properly
+- Cache-busting query parameters added to script tags in `index.html`
+
+---
+
 ## Project Overview
 Building a single-page web application that analyzes real estate market data using beta calculations (similar to stock market beta analysis) to understand how local markets correlate with national trends.
 

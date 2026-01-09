@@ -54,11 +54,6 @@ body {
     border-color: #777777;
 }
 
-.view-selector option:hover {
-    background: rgba(255, 255, 255, 0.2);
-    color: #ffffff;
-}
-
 .view-selector:focus {
     border-color: #ffffff;
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
@@ -314,6 +309,11 @@ body {
     color: #00ff7f;
     margin-bottom: 0.25rem;
 }
+.
+
+
+
+
 
 .metric-change {
     font-size: 0.75rem;
@@ -386,7 +386,43 @@ body {
     text-shadow: none;
 }
 
-/* Consolidated mobile responsive design moved to end of file */
+@media (max-width: 768px) {
+    .dashboard-header {
+        flex-direction: column;
+        gap: 1rem;
+        padding: 0.75rem;
+    }
+    
+    .dashboard-header h1 {
+        font-size: 1.2rem;
+    }
+    
+    .controls {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .detail-panel {
+        position: absolute;
+        right: -400px;
+        top: 0;
+        height: 100%;
+        width: 400px;
+        min-width: 400px;
+        transition: right 0.3s ease;
+        z-index: 1000;
+    }
+    
+    .detail-panel.open {
+        right: 0;
+    }
+    
+    .legend {
+        bottom: 10px;
+        left: 10px;
+        font-size: 0.8rem;
+    }
+}
 
 /* Trends Section */
 .trends-section {
@@ -487,12 +523,10 @@ body {
     padding: 1.5rem;
     max-width: 700px;
     width: 85%;
-    max-height: 80vh;
+    max-height: 85vh;
     overflow-y: auto;
     position: relative;
     box-shadow: 0 10px 30px rgba(255, 255, 255, 0.1);
-    display: flex;
-    flex-direction: column;
 }
 
 .lightbox-close {
@@ -532,25 +566,18 @@ body {
     padding: 1rem;
     border: 1px solid #333;
     margin-bottom: 1rem;
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
 }
 
 .lightbox-chart-container canvas {
     width: 100% !important;
-    height: 350px !important;
-    max-height: 45vh;
+    height: 300px !important;
 }
 
 .lightbox-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-    flex-shrink: 0;
+    gap: 0.75rem;
+    margin-top: 0.75rem;
 }
 
 /* Specific layouts for different numbers of stats */
@@ -568,35 +595,35 @@ body {
 
 .lightbox-stat {
     background: #2a2a2a;
-    padding: 0.3rem;
-    border-radius: 4px;
+    padding: 0.6rem;
+    border-radius: 6px;
     text-align: center;
     min-width: 0; /* Allow flex shrinking */
 }
 
 .lightbox-stat-label {
     color: #aaa;
-    font-size: 0.6rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
-    letter-spacing: 0.1px;
-    margin-bottom: 0.2rem;
-    min-height: 1.4rem;
+    letter-spacing: 0.3px;
+    margin-bottom: 0.4rem;
+    min-height: 2.2rem;
     display: flex;
     align-items: flex-start;
     justify-content: center;
     text-align: center;
-    line-height: 1.0;
+    line-height: 1.1;
     word-wrap: break-word;
     hyphens: auto;
 }
 
 .lightbox-stat-value {
     color: #fff;
-    font-size: 0.85rem;
+    font-size: 1.1rem;
     font-weight: bold;
     text-align: center;
-    line-height: 1.0rem;
-    height: 1.0rem;
+    line-height: 1.4rem;
+    height: 1.4rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -808,332 +835,4 @@ body {
 .back-button:active {
     transform: translateY(0);
     background: rgba(255, 255, 255, 0.2);
-}
-
-.back-label {
-    position: absolute;
-    top: 26px;
-    right: 112px;
-    z-index: 1000;
-    color: white;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: normal;
-    white-space: nowrap;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-    pointer-events: none;
-}
-
-.state-navigation-tooltip {
-    background: rgba(59, 130, 246, 0.9);
-    border: 1px solid #3B82F6;
-    border-radius: 4px;
-    color: white;
-    font-size: 12px;
-    padding: 4px 8px;
-    font-weight: normal;
-}
-
-/* Mobile Responsive Design - Bottom Sheet Sidebar */
-@media (max-width: 768px) {
-    /* Dashboard header adjustments */
-    .dashboard-header {
-        flex-direction: column;
-        gap: 1rem;
-        padding: 0.75rem;
-    }
-    
-    .dashboard-header h1 {
-        font-size: 1.2rem;
-    }
-    
-    /* Main container adjustments */
-    .main-content {
-        flex-direction: column;
-        height: 100vh;
-    }
-    
-    .map-container {
-        flex: 1;
-        width: 100%;
-        position: relative;
-    }
-    
-    /* Bottom sheet sidebar */
-    .detail-panel {
-        position: fixed;
-        bottom: -75vh; /* Start completely hidden */
-        left: 0;
-        right: 0;
-        width: 100%;
-        height: 75vh;
-        max-height: 80vh;
-        transform: translateY(-80px); /* Show just the header portion */
-        transition: transform 0.3s ease-in-out;
-        z-index: 2000;
-        border-radius: 16px 16px 0 0;
-        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
-        overflow-y: auto;
-        border-left: none;
-        min-width: auto;
-    }
-    
-    .detail-panel.active {
-        transform: translateY(-75vh); /* Fully visible when active */
-    }
-    
-    /* Add mobile handle for dragging */
-    .detail-panel::before {
-        content: '';
-        position: absolute;
-        top: 8px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 40px;
-        height: 4px;
-        background: #666;
-        border-radius: 2px;
-        z-index: 1;
-    }
-    
-    /* Mobile close button */
-    .detail-panel .mobile-close {
-        position: absolute;
-        top: 12px;
-        right: 16px;
-        background: #333;
-        color: #fff;
-        border: none;
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
-        font-size: 18px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10;
-        transition: background 0.2s ease;
-    }
-    
-    .detail-panel .mobile-close:hover {
-        background: #555;
-    }
-    
-    /* Sidebar header adjustments */
-    .sidebar-header {
-        padding: 1rem;
-        background: #2a2a2a;
-        border-bottom: 1px solid #444;
-        border-radius: 16px 16px 0 0;
-        position: relative;
-        z-index: 5;
-    }
-    
-    /* Mobile view selector styling */
-    .view-selector {
-        width: 100%;
-        min-height: 44px; /* Touch-friendly size */
-        padding: 12px 16px;
-        background: #333333;
-        color: #ffffff;
-        border: 1px solid #555555;
-        border-radius: 8px;
-        font-size: 1rem;
-        cursor: pointer;
-        outline: none;
-        appearance: none;
-        -webkit-appearance: none;
-        -moz-appearance: none;
-        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23ffffff' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
-        background-position: right 12px center;
-        background-repeat: no-repeat;
-        background-size: 16px;
-        padding-right: 40px;
-    }
-    
-    .view-selector:focus {
-        border-color: #ffffff;
-        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
-    }
-    
-    /* Sidebar content adjustments */
-    .sidebar-content {
-        padding-top: 20px; /* Reduced since header has its own padding */
-    }
-    
-    /* Mobile controls */
-    .controls {
-        position: fixed;
-        top: 16px;
-        left: 16px;
-        right: 16px;
-        z-index: 1500;
-        flex-direction: row;
-        justify-content: space-between;
-        background: rgba(0, 0, 0, 0.8);
-        padding: 8px 12px;
-        border-radius: 12px;
-        backdrop-filter: blur(10px);
-    }
-    
-    .view-selector {
-        display: flex;
-        gap: 8px;
-    }
-    
-    .view-selector button {
-        padding: 8px 12px;
-        min-height: 44px; /* Touch-friendly size */
-        font-size: 0.9rem;
-    }
-    
-    /* Navigation buttons for mobile */
-    .navigation-buttons {
-        display: flex;
-        gap: 8px;
-    }
-    
-    .back-button,
-    .close-button {
-        min-height: 44px;
-        min-width: 44px;
-        padding: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.2rem;
-    }
-    
-    /* Metric cards - 2 columns on mobile */
-    .detail-panel [style*="grid-template-columns: 1fr 1fr 1fr"] {
-        grid-template-columns: 1fr 1fr !important;
-        gap: 0.8rem;
-    }
-    
-    /* Adjust metric card that spans 2 columns */
-    .metric-card[style*="grid-column: 1 / 3"] {
-        grid-column: 1 / 3 !important;
-    }
-    
-    /* Mobile typography */
-    .detail-panel h2 {
-        font-size: 1.2rem !important;
-    }
-    
-    .detail-panel h3 {
-        font-size: 1.1rem;
-    }
-    
-    .metric-card h5 {
-        font-size: 0.85rem;
-        margin-bottom: 0.3rem;
-    }
-    
-    .metric-value {
-        font-size: 1.1rem !important;
-    }
-    
-    .metric-change {
-        font-size: 0.75rem;
-    }
-    
-    /* Lightbox adjustments for mobile */
-    .lightbox-modal {
-        width: 95vw;
-        height: 85vh;
-        max-width: none;
-        max-height: 85vh;
-        margin: 7.5vh auto;
-        padding: 1rem;
-    }
-    
-    .lightbox-chart-container {
-        min-height: 200px;
-    }
-    
-    .lightbox-chart-container canvas {
-        height: 250px !important;
-        max-height: 35vh !important;
-    }
-    
-    .lightbox-stats {
-        grid-template-columns: 1fr 1fr !important;
-        gap: 0.4rem;
-    }
-    
-    .lightbox-stat {
-        padding: 0.3rem;
-    }
-    
-    .lightbox-stat-label {
-        font-size: 0.65rem;
-        min-height: 1.5rem;
-    }
-    
-    .lightbox-stat-value {
-        font-size: 0.9rem;
-    }
-    
-    /* Data info adjustments */
-    .data-info {
-        position: fixed;
-        bottom: 16px;
-        left: 16px;
-        right: 16px;
-        z-index: 1400;
-        background: rgba(0, 0, 0, 0.8);
-        padding: 8px 12px;
-        border-radius: 8px;
-        font-size: 0.8rem;
-        text-align: center;
-        backdrop-filter: blur(10px);
-        display: none; /* Hide on mobile when sidebar is active */
-    }
-    
-    .detail-panel:not(.active) ~ .data-info {
-        display: block;
-    }
-    
-    /* Touch improvements */
-    .metric-card {
-        cursor: pointer;
-        -webkit-tap-highlight-color: rgba(255, 255, 255, 0.1);
-    }
-    
-    .metric-card:active {
-        transform: scale(0.98);
-        transition: transform 0.1s ease;
-    }
-    
-    /* Hide desktop-only elements */
-    .sidebar-instructions {
-        display: none;
-    }
-}
-
-/* Tablet adjustments */
-@media (min-width: 769px) and (max-width: 1024px) {
-    .detail-panel {
-        width: 350px;
-        min-width: 350px;
-    }
-    
-    .controls {
-        right: 370px; /* Adjust for narrower sidebar */
-    }
-}
-
-/* Large screens */
-@media (min-width: 1400px) {
-    .detail-panel {
-        width: 450px;
-        min-width: 450px;
-    }
-    
-    .controls {
-        right: 470px;
-    }
 }

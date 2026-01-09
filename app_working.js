@@ -1481,52 +1481,30 @@ class RealEstateDashboard {
                 <div class="metric-card" style="grid-column: 1 / 3; display: flex; flex-direction: column; cursor: pointer;" onclick="window.dashboard.showCountyTrendLightbox('${countyId}', 'active_listing_count')">
                     <h5>Active Listings</h5>
                     <div class="metric-value">${this.formatValue(countyData.active_listing_count)}</div>
-                    <div style="flex-grow: 1; display: flex; align-items: center;">
-                        <div class="metric-change" style="width: 85%;">
-                            <span class="${getChangeClass(countyData.active_listing_count_mm)}">MoM: ${this.formatPercent(countyData.active_listing_count_mm)}%</span>
-                            <span class="${getChangeClass(countyData.active_listing_count_yy)}">YoY: ${this.formatPercent(countyData.active_listing_count_yy)}%</span>
-                        </div>
-                    </div>
                 </div>
-                
+
                 <!-- Median Price -->
                 <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showCountyTrendLightbox('${countyId}', 'median_listing_price')">
                     <h5>Median Price</h5>
                     <div class="metric-value" style="color: #ffd700;">$${this.formatPrice(countyData.median_listing_price)}</div>
-                    <div class="metric-change">
-                        <span class="${getChangeClass(countyData.median_listing_price_mm)}">MoM: ${this.formatPercent(countyData.median_listing_price_mm)}%</span>
-                        <span class="${getChangeClass(countyData.median_listing_price_yy)}">YoY: ${this.formatPercent(countyData.median_listing_price_yy)}%</span>
-                    </div>
                 </div>
-                
+
                 <!-- New Listings -->
                 <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showCountyTrendLightbox('${countyId}', 'new_listing_count')">
                     <h5>New Listings</h5>
                     <div class="metric-value">${this.formatValue(countyData.new_listing_count)}</div>
-                    <div class="metric-change">
-                        <span class="${getChangeClass(countyData.new_listing_count_mm)}">MoM: ${this.formatPercent(countyData.new_listing_count_mm)}%</span>
-                        <span class="${getChangeClass(countyData.new_listing_count_yy)}">YoY: ${this.formatPercent(countyData.new_listing_count_yy)}%</span>
-                    </div>
                 </div>
-                
+
                 <!-- Pending Listings -->
                 <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showCountyTrendLightbox('${countyId}', 'pending_listing_count')">
                     <h5>Pending Sale</h5>
                     <div class="metric-value">${this.formatValue(countyData.pending_listing_count)}</div>
-                    <div class="metric-change">
-                        <span class="${getChangeClass(countyData.pending_listing_count_mm)}">MoM: ${this.formatPercent(countyData.pending_listing_count_mm)}%</span>
-                        <span class="${getChangeClass(countyData.pending_listing_count_yy)}">YoY: ${this.formatPercent(countyData.pending_listing_count_yy)}%</span>
-                    </div>
                 </div>
-                
+
                 <!-- Median Days on Market -->
                 <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showCountyTrendLightbox('${countyId}', 'median_days_on_market')">
                     <h5>Median Days</h5>
                     <div class="metric-value">${this.formatValue(countyData.median_days_on_market)}</div>
-                    <div class="metric-change">
-                        <span class="${getChangeClass(countyData.median_days_on_market_mm)}">MoM: ${this.formatPercent(countyData.median_days_on_market_mm)}%</span>
-                        <span class="${getChangeClass(countyData.median_days_on_market_yy)}">YoY: ${this.formatPercent(countyData.median_days_on_market_yy)}%</span>
-                    </div>
                 </div>
             </div>
         `;
@@ -1579,10 +1557,11 @@ class RealEstateDashboard {
             overlay.classList.add('active');
             
             // Try indexed performance first for supported metrics
-            if (supportsIndexed) {
+            // TEMPORARILY DISABLED - using CSV data until JSON files are updated
+            if (false && supportsIndexed) {
                 try {
                     let indexedData = null;
-                    
+
                     if (this.useStaticData && window.completeStaticDataLoader) {
                         // Use static data loader for county data
                         const metricMap = {
@@ -1627,28 +1606,20 @@ class RealEstateDashboard {
                 }
             }
             
-            // Fallback to regular trend data for unsupported metrics or if indexed performance fails  
-            // For median days on market, show regular trend view similar to states
-            if (metric === 'median_days_on_market') {
-                setTimeout(() => {
-                    this.showCountyMedianDaysTrend(countyId, countyName, statsContainer);
-                }, 100);
-                return;
+            // Fallback to regular historical data from CSV
+            console.log(`📊 Getting county historical data for ${countyId}, metric: ${metric}`);
+
+            const trendData = this.dataProcessor.getCountyHistoricalData(countyId, metric, 60);
+
+            console.log(`📈 Received ${trendData.length} county data points`);
+            if (trendData.length > 0) {
+                console.log(`County date range: ${trendData[0].date} to ${trendData[trendData.length-1].date}`);
             }
-            
-            // If we get here, show an error for indexed metrics that failed
+
+            // Render chart
             setTimeout(() => {
-                statsContainer.innerHTML = `
-                    <div style="grid-column: 1 / -1; text-align: center; padding: 2rem;">
-                        <h3 style="color: #fff; margin-bottom: 1rem;">County Data Unavailable</h3>
-                        <p style="color: #aaa; margin-bottom: 1.5rem;">
-                            ${metricLabels[metric]} indexed performance data is not available for ${countyName} County.
-                        </p>
-                        <p style="color: #ccc; font-size: 0.9rem;">
-                            County FIPS: ${countyId} • This county may not have sufficient data for analysis.
-                        </p>
-                    </div>
-                `;
+                this.renderLightboxChart(trendData, metric, countyName);
+                this.populateTrendStats(this.currentCountyData, metric, trendData, statsContainer);
             }, 100);
             
         } catch (error) {
@@ -2681,52 +2652,30 @@ class RealEstateDashboard {
                 <div class="metric-card" style="grid-column: 1 / 3; display: flex; flex-direction: column; cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${locationName}', 'active_listing_count')">
                     <h5>Active Listings</h5>
                     <div class="metric-value">${this.formatValue(locationData.active_listing_count)}</div>
-                    <div style="flex-grow: 1; display: flex; align-items: center;">
-                        <div class="metric-change" style="width: 85%;">
-                            <span class="${getChangeClass(locationData.active_listing_count_mm)}">MoM: ${this.formatPercent(locationData.active_listing_count_mm)}%</span>
-                            <span class="${getChangeClass(locationData.active_listing_count_yy)}">YoY: ${this.formatPercent(locationData.active_listing_count_yy)}%</span>
-                        </div>
-                    </div>
                 </div>
-                
+
                 <!-- Position 13: Median Price -->
                 <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${locationName}', 'median_listing_price')">
                     <h5>Median Price</h5>
                     <div class="metric-value" style="color: #ffd700;">$${this.formatPrice(locationData.median_listing_price)}</div>
-                    <div class="metric-change">
-                        <span class="${getChangeClass(locationData.median_listing_price_mm)}">MoM: ${this.formatPercent(locationData.median_listing_price_mm)}%</span>
-                        <span class="${getChangeClass(locationData.median_listing_price_yy)}">YoY: ${this.formatPercent(locationData.median_listing_price_yy)}%</span>
-                    </div>
                 </div>
-                
+
                 <!-- Position 21: New Listings -->
                 <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${locationName}', 'new_listing_count')">
                     <h5>New Listings</h5>
                     <div class="metric-value">${this.formatValue(locationData.new_listing_count)}</div>
-                    <div class="metric-change">
-                        <span class="${getChangeClass(locationData.new_listing_count_mm)}">MoM: ${this.formatPercent(locationData.new_listing_count_mm)}%</span>
-                        <span class="${getChangeClass(locationData.new_listing_count_yy)}">YoY: ${this.formatPercent(locationData.new_listing_count_yy)}%</span>
-                    </div>
                 </div>
-                
+
                 <!-- Position 22: Pending Sale -->
                 <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${locationName}', 'pending_listing_count')">
                     <h5>Pending Sale</h5>
                     <div class="metric-value">${this.formatValue(locationData.pending_listing_count)}</div>
-                    <div class="metric-change">
-                        <span class="${getChangeClass(locationData.pending_listing_count_mm)}">MoM: ${this.formatPercent(locationData.pending_listing_count_mm)}%</span>
-                        <span class="${getChangeClass(locationData.pending_listing_count_yy)}">YoY: ${this.formatPercent(locationData.pending_listing_count_yy)}%</span>
-                    </div>
                 </div>
-                
+
                 <!-- Position 23: Median Days -->
                 <div class="metric-card" style="cursor: pointer;" onclick="window.dashboard.showTrendLightbox('${locationName}', 'median_days_on_market')">
                     <h5>Median Days</h5>
                     <div class="metric-value">${this.formatValue(locationData.median_days_on_market)}</div>
-                    <div class="metric-change">
-                        <span class="${getChangeClass(locationData.median_days_on_market_mm)}">MoM: ${this.formatPercent(locationData.median_days_on_market_mm)}%</span>
-                        <span class="${getChangeClass(locationData.median_days_on_market_yy)}">YoY: ${this.formatPercent(locationData.median_days_on_market_yy)}%</span>
-                    </div>
                 </div>
             </div>
         `;
@@ -3218,15 +3167,21 @@ class RealEstateDashboard {
     
     // Show the trend lightbox for a specific metric
     async showTrendLightbox(locationName, metric) {
+        console.log(`🔵 showTrendLightbox called: location=${locationName}, metric=${metric}`);
+
         // Check if data processor is available
         if (!this.dataProcessor) {
             console.error('Data processor not available yet');
             return;
         }
-        
+
+        console.log('✅ dataProcessor is available');
+
         // Determine if this is state or metro data
         const stateData = this.stateData[locationName];
         const metroData = this.metroData[locationName];
+
+        console.log(`State data exists: ${!!stateData}, Metro data exists: ${!!metroData}`);
         const isMetro = !stateData && metroData;
         const data = stateData || metroData;
         
@@ -3268,10 +3223,11 @@ class RealEstateDashboard {
         overlay.classList.add('active');
         
         // For median days on market in metro areas, show comparison with national
-        if (metric === 'median_days_on_market' && isMetro && data.cbsa_code) {
+        // TEMPORARILY DISABLED - using CSV data until JSON files are updated
+        if (false && metric === 'median_days_on_market' && isMetro && data.cbsa_code) {
             try {
                 let medianDaysData = null;
-                
+
                 if (this.useStaticData && window.completeStaticDataLoader) {
                     // Use static data loader
                     medianDaysData = await window.completeStaticDataLoader.getMetroMedianDays(data.cbsa_code);
@@ -3282,7 +3238,7 @@ class RealEstateDashboard {
                         medianDaysData = await response.json();
                     }
                 }
-                
+
                 if (medianDaysData) {
                     setTimeout(() => {
                         this.renderMedianDaysComparisonChart(medianDaysData, locationName);
@@ -3294,9 +3250,10 @@ class RealEstateDashboard {
                 console.warn('Failed to load median days comparison data, falling back to regular chart:', error);
             }
         }
-        
+
         // For median days on market in state areas, show comparison with national
-        if (metric === 'median_days_on_market' && stateData && data.state_id) {
+        // TEMPORARILY DISABLED - using CSV data until JSON files are updated
+        if (false && metric === 'median_days_on_market' && stateData && data.state_id) {
             try {
                 let medianDaysData = null;
                 
@@ -3324,7 +3281,8 @@ class RealEstateDashboard {
         }
 
         // For supported metrics in metro and state areas, try to get indexed performance data
-        if (supportsIndexed && (data.cbsa_code || data.state_id)) {
+        // TEMPORARILY DISABLED - using CSV data until indexed JSON files are updated
+        if (false && supportsIndexed && (data.cbsa_code || data.state_id)) {
             try {
                 let indexedData = null;
                 
@@ -3396,10 +3354,17 @@ class RealEstateDashboard {
         }
         
         // Fallback to regular historical data
-        const trendData = isMetro 
+        console.log(`📊 Getting historical data for ${locationName}, isMetro: ${isMetro}`);
+
+        const trendData = isMetro
             ? this.dataProcessor.getMetroHistoricalData(locationName, metric, 60)
             : this.dataProcessor.getStateHistoricalData(locationName, metric, 60);
-        
+
+        console.log(`📈 Received ${trendData.length} data points`);
+        if (trendData.length > 0) {
+            console.log(`Date range: ${trendData[0].date} to ${trendData[trendData.length-1].date}`);
+        }
+
         // Render chart
         setTimeout(() => {
             this.renderLightboxChart(trendData, metric, locationName);
