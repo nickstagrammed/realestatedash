@@ -1418,18 +1418,34 @@ class RealEstateDashboard {
     async showCountyDetail(countyFIPS, countyName, stateName) {
         try {
             let countyData = null;
-            
-            if (this.useStaticData && window.completeStaticDataLoader) {
-                // Use static data loader
-                countyData = await window.completeStaticDataLoader.getCountyData(countyFIPS);
+
+            // Use CSV data from dataProcessor instead of old JSON files
+            const fipsCode = String(countyFIPS).padStart(5, '0');
+            console.log(`🔍 Loading county detail for FIPS: ${fipsCode}`);
+
+            const countyTimeSeries = this.dataProcessor.countyData?.[fipsCode];
+
+            if (countyTimeSeries && countyTimeSeries.length > 0) {
+                // Get the latest record (already sorted descending by date)
+                const latestRecord = countyTimeSeries[0];
+                console.log(`✅ Found county data for ${countyName}, latest date: ${latestRecord.month_date_yyyymm}`);
+
+                // Format it to match the expected structure
+                countyData = {
+                    county_fips: fipsCode,
+                    county_name: countyName,
+                    state_name: stateName,
+                    month_date: latestRecord.month_date_yyyymm,
+                    active_listing_count: parseFloat(latestRecord.active_listing_count) || 0,
+                    new_listing_count: parseFloat(latestRecord.new_listing_count) || 0,
+                    pending_listing_count: parseFloat(latestRecord.pending_listing_count) || 0,
+                    median_listing_price: parseFloat(latestRecord.median_listing_price) || 0,
+                    median_days_on_market: parseFloat(latestRecord.median_days_on_market) || 0
+                };
             } else {
-                // Fallback to API
-                const response = await fetch(`${this.API_BASE_URL}/county/${countyFIPS}`);
-                if (response.ok) {
-                    countyData = await response.json();
-                }
+                console.warn(`⚠️ No county data found for FIPS: ${fipsCode}`);
             }
-            
+
             this.displayCountyDetails(countyData, countyName, stateName);
         } catch (error) {
             console.error(`Failed to load county details for ${countyName}:`, error);
